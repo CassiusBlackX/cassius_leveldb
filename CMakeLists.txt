@@ -3,13 +3,13 @@ cmake_minimum_required(VERSION 3.10)
 # 设置项目名称
 project(test_leveldb)
 
-set(${CMAKE_TOOLCHAIN_FILE} "D:/Application/vcpkg/scripts/buildsystems/vcpkg.cmake")
+# set(${CMAKE_TOOLCHAIN_FILE} "D:/Application/vcpkg/scripts/buildsystems/vcpkg.cmake")
 
 # 设置C++标准
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-set(LEVELDB_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/leveldb")
+set(LEVELDB_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # 包含leveldb的头文件
 include_directories(${LEVELDB_ROOT_DIR})
@@ -88,9 +88,9 @@ set(UTILS_FILES
 
 # generate executable files
 # trace_kv
-add_executable(trace_kvs ${CMAKE_CURRENT_SOURCE_DIR}/src/trace_kvs.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
-target_link_libraries(trace_kvs pthread)
-target_compile_definitions(trace_kvs PRIVATE 
+add_executable(trace_kv ${CMAKE_CURRENT_SOURCE_DIR}/src/trace_kv.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
+target_link_libraries(trace_kv pthread)
+target_compile_definitions(trace_kv PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
     ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
     PRINT_LEVEL  # if `PRINT_LEVEL` is defined, then a lot of log infos will be compiled
@@ -107,8 +107,9 @@ target_compile_definitions(benchmark_zal PRIVATE
     INTER_WRITE  # if `INTER_WRITE` is defined, then we will write a couple of ldb files in one time
 )
 
+# dummy_test
 add_executable(dummy_test ${CMAKE_CURRENT_SOURCE_DIR}/src/dummy_test.cpp 
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/zal_utils/timer.cpp
+    ${UTILS_FILES}
     # ${LEVELDB_SOURCES}
 )
 target_link_libraries(dummy_test pthread)
