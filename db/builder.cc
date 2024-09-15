@@ -12,6 +12,11 @@
 #include "leveldb/env.h"
 #include "leveldb/iterator.h"
 
+#ifdef TRACE_KV
+#include "zal_utils.h"
+extern zal_utils::ThreadSafeQueue<zal_utils::table_range> table_range;
+#endif
+
 namespace leveldb {
 
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
@@ -76,6 +81,10 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
   } else {
     env->RemoveFile(fname);
   }
+
+  #ifdef TRACE_KV
+  table_range.push(zal_utils::table_range(meta->number, meta->smallest.user_key().ToString(), meta->largest.user_key().ToString()));
+  #endif
   return s;
 }
 

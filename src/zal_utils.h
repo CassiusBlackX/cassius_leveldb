@@ -103,6 +103,16 @@ std::string replaceDiskNumber(const std::string& pathStr, unsigned diskNumber);
 /// @param rindex usually, it is negative, which means the index from the end. e.g. -1 means the last part
 /// @return replaced pathString
 std::string replaceDiskNumber(const std::string& pathStr, unsigned diskNumber, int rindex);
+
+struct table_range {
+    unsigned index;
+    std::string smallest;
+    std::string largest;
+
+    table_range(unsigned index, const std::string& smallest, const std::string& largest) : index(index), smallest(smallest), largest(largest) {}
+    table_range() = default;
+
+};
 } // namespace zal_utils
 
 #define ec_m 6

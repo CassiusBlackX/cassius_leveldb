@@ -4,7 +4,7 @@
 #include <random>
 
 namespace zal_utils {
-    std::string gen_key(size_t index) {
+std::string gen_key(size_t index) {
     std::ostringstream s;
     s << index;
     return s.str();
