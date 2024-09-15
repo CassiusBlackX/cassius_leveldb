@@ -26,26 +26,43 @@ struct Table::Rep {
 
   Options options;
   Status status;
-  RandomAccessFile* file;
+  RandomAccessFile** file;
   uint64_t cache_id;
   FilterBlockReader* filter;
   const char* filter_data;
 
   BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
   Block* index_block;
+
+  uint64_t size_;
 };
 
-Status Table::Open(const Options& options, RandomAccessFile* file,
+Status Table::Open(const Options& options, RandomAccessFile** file,
                    uint64_t size, Table** table) {
   *table = nullptr;
   if (size < Footer::kEncodedLength) {
     return Status::Corruption("file is too short to be an sstable");
   }
 
+  file[0]->size_ = size;
+
   char footer_space[Footer::kEncodedLength];
   Slice footer_input;
-  Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
-                        &footer_input, footer_space);
+
+  int stripe_length = (size / 4) + 1;  
+  int start_filenum = (size - Footer::kEncodedLength) / stripe_length;
+  int start_off = (size - Footer::kEncodedLength) % stripe_length;
+  int end_filenum = ec_k - 1;
+  int end_off = size % stripe_length;
+  Status s;
+  if(start_filenum == end_filenum)
+    s = file[start_filenum]->Read(start_off,Footer::kEncodedLength,&footer_input,footer_space);
+  else
+  {
+    s = file[start_filenum]->Read(start_off,stripe_length-start_off,&footer_input,footer_space);
+    s = file[end_filenum]->Read(0,end_off,&footer_input,footer_space+stripe_length-start_off);
+    footer_input = Slice(footer_space,Footer::kEncodedLength);
+  }
   if (!s.ok()) return s;
 
   Footer footer;
@@ -72,6 +89,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
     rep->filter_data = nullptr;
     rep->filter = nullptr;
+    rep->size_ = size;
     *table = new Table(rep);
     (*table)->ReadMeta(footer);
   }
@@ -153,6 +171,7 @@ static void ReleaseBlock(void* arg, void* h) {
 Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
                              const Slice& index_value) {
   Table* table = reinterpret_cast<Table*>(arg);
+  table->rep_->file[0]->size_ = table->rep_->size_;
   Cache* block_cache = table->rep_->options.block_cache;
   Block* block = nullptr;
   Cache::Handle* cache_handle = nullptr;

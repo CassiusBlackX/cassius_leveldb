@@ -74,6 +74,8 @@ bool ConsumeDecimalNumber(Slice* in, uint64_t* val) {
   }
 
   *val = value;
+  if(*current == '_')
+    current += 2;
   const size_t digits_consumed = current - start;
   in->remove_prefix(digits_consumed);
   return digits_consumed != 0;

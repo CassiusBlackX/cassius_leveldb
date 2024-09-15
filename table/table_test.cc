@@ -216,7 +216,9 @@ class TableConstructor : public Constructor {
   Status FinishImpl(const Options& options, const KVMap& data) override {
     Reset();
     StringSink sink;
-    TableBuilder builder(options, &sink);
+    WritableFile* file[ec_m];
+    file[0] = &sink;
+    TableBuilder builder(options, file);
 
     for (const auto& kvp : data) {
       builder.Add(kvp.first, kvp.second);
@@ -231,7 +233,10 @@ class TableConstructor : public Constructor {
     source_ = new StringSource(sink.contents());
     Options table_options;
     table_options.comparator = options.comparator;
-    return Table::Open(table_options, source_, sink.contents().size(), &table_);
+
+    //not run
+    RandomAccessFile* sfile[ec_m+1];
+    return Table::Open(table_options, sfile, sink.contents().size(), &table_);
   }
 
   Iterator* NewIterator() const override {

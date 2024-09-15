@@ -79,7 +79,7 @@ struct DBImpl::CompactionState {
   std::vector<Output> outputs;
 
   // State kept for output being generated
-  WritableFile* outfile;
+  WritableFile** outfile;
   TableBuilder* builder;
 
   uint64_t total_bytes;
@@ -342,7 +342,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     return s;
   }
   std::set<uint64_t> expected;
-  versions_->AddLiveFiles(&expected);
+  versions_->AddLiveFiles(&expected);   
   uint64_t number;
   FileType type;
   std::vector<uint64_t> logs;
@@ -397,7 +397,6 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       if (this->status != nullptr && this->status->ok()) *this->status = s;
     }
   };
-
   mutex_.AssertHeld();
 
   // Open the log file
@@ -422,7 +421,6 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   log::Reader reader(file, &reporter, true /*checksum*/, 0 /*initial_offset*/);
   Log(options_.info_log, "Recovering log #%llu",
       (unsigned long long)log_number);
-
   // Read all the records and add to a memtable
   std::string scratch;
   Slice record;
@@ -436,7 +434,6 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       continue;
     }
     WriteBatchInternal::SetContents(&batch, record);
-
     if (mem == nullptr) {
       mem = new MemTable(internal_comparator_);
       mem->Ref();
@@ -451,7 +448,6 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
     if (last_seq > *max_sequence) {
       *max_sequence = last_seq;
     }
-
     if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
       compactions++;
       *save_manifest = true;
@@ -465,9 +461,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       }
     }
   }
-
   delete file;
-
   // See if we should keep reusing the last log file.
   if (status.ok() && options_.reuse_logs && last_log && compactions == 0) {
     assert(logfile_ == nullptr);
@@ -489,7 +483,6 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       }
     }
   }
-
   if (mem != nullptr) {
     // mem did not get reused; compact it.
     if (status.ok()) {
@@ -519,7 +512,6 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
     mutex_.Lock();
   }
-
   Log(options_.info_log, "Level-0 table #%llu: %lld bytes %s",
       (unsigned long long)meta.number, (unsigned long long)meta.file_size,
       s.ToString().c_str());
@@ -788,8 +780,13 @@ void DBImpl::CleanupCompaction(CompactionState* compact) {
     delete compact->builder;
   } else {
     assert(compact->outfile == nullptr);
+  }/*
+  for(int i=0;i<ec_m;i++)
+  {
+    delete compact->outfile[i];
+    compact->outfile[i] = nullptr;
   }
-  delete compact->outfile;
+  free(compact->outfile);*/
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     const CompactionState::Output& out = compact->outputs[i];
     pending_outputs_.erase(out.number);
@@ -815,7 +812,27 @@ Status DBImpl::OpenCompactionOutputFile(CompactionState* compact) {
 
   // Make the output file
   std::string fname = TableFileName(dbname_, file_number);
-  Status s = env_->NewWritableFile(fname, &compact->outfile);
+  Status s;
+  WritableFile** file = (WritableFile **)malloc(sizeof(WritableFile *) * ec_m);
+  char fname_new[30];
+  int point = 0; 
+  for(point=0;fname[point]!='.';point++)
+    fname_new[point] = fname[point];
+  fname_new[point] = '_';
+  fname_new[point+2] = '.';
+  fname_new[point+3] = 'l';
+  fname_new[point+4] = 'd';
+  fname_new[point+5] = 'b';
+  fname_new[point+6] = '\0';
+  for(int i=0;i<ec_m;i++)
+  {
+    fname_new[point+1] = char(i+48);
+    s = env_->NewWritableFile(std::string(fname_new,point+6), &file[i]); 
+  }
+  compact->outfile = file;
+  if (!s.ok()) {
+    return s;
+  }
   if (s.ok()) {
     compact->builder = new TableBuilder(options_, compact->outfile);
   }
@@ -847,10 +864,12 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
 
   // Finish and check for file errors
   if (s.ok()) {
-    s = compact->outfile->Sync();
+    for(int i=0;i<ec_m;i++)
+      s = compact->outfile[i]->Sync();
   }
   if (s.ok()) {
-    s = compact->outfile->Close();
+    for(int i=0;i<ec_m;i++)
+      s = compact->outfile[i]->Close();
   }
   delete compact->outfile;
   compact->outfile = nullptr;
@@ -911,13 +930,12 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
   // Release mutex while we're actually doing the compaction work
   mutex_.Unlock();
-
   input->SeekToFirst();
   Status status;
   ParsedInternalKey ikey;
   std::string current_user_key;
   bool has_current_user_key = false;
-  SequenceNumber last_sequence_for_key = kMaxSequenceNumber;
+  SequenceNumber last_sequence_for_key = kMaxSequenceNumber;int num=0;
   while (input->Valid() && !shutting_down_.load(std::memory_order_acquire)) {
     // Prioritize immutable compaction work
     if (has_imm_.load(std::memory_order_relaxed)) {

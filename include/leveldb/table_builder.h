@@ -19,6 +19,10 @@
 #include "leveldb/options.h"
 #include "leveldb/status.h"
 
+#define ec_m 6
+#define ec_k 4
+#define ec_p (ec_m - ec_k)
+
 namespace leveldb {
 
 class BlockBuilder;
@@ -30,7 +34,7 @@ class LEVELDB_EXPORT TableBuilder {
   // Create a builder that will store the contents of the table it is
   // building in *file.  Does not close the file.  It is up to the
   // caller to close the file after calling Finish().
-  TableBuilder(const Options& options, WritableFile* file);
+  TableBuilder(const Options& options, WritableFile** file);
 
   TableBuilder(const TableBuilder&) = delete;
   TableBuilder& operator=(const TableBuilder&) = delete;
@@ -79,6 +83,8 @@ class LEVELDB_EXPORT TableBuilder {
   // Finish() call, returns the size of the final generated file.
   uint64_t FileSize() const;
 
+  void Ec();
+
  private:
   bool ok() const { return status().ok(); }
   void WriteBlock(BlockBuilder* block, BlockHandle* handle);
@@ -86,6 +92,7 @@ class LEVELDB_EXPORT TableBuilder {
 
   struct Rep;
   Rep* rep_;
+  std::string buffer_;
 };
 
 }  // namespace leveldb

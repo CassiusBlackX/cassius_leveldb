@@ -10,6 +10,10 @@
 #include "leveldb/export.h"
 #include "leveldb/iterator.h"
 
+#define ec_m 6
+#define ec_k 4
+#define ec_p (ec_m - ec_k)
+
 namespace leveldb {
 
 class Block;
@@ -37,7 +41,7 @@ class LEVELDB_EXPORT Table {
   // for the duration of the returned table's lifetime.
   //
   // *file must remain live while this Table is in use.
-  static Status Open(const Options& options, RandomAccessFile* file,
+  static Status Open(const Options& options, RandomAccessFile** file,
                      uint64_t file_size, Table** table);
 
   Table(const Table&) = delete;

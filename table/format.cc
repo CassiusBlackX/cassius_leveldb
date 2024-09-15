@@ -66,23 +66,37 @@ Status Footer::DecodeFrom(Slice* input) {
   return result;
 }
 
-Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
+Status ReadBlock(RandomAccessFile** file, const ReadOptions& options,
                  const BlockHandle& handle, BlockContents* result) {
   result->data = Slice();
   result->cachable = false;
   result->heap_allocated = false;
-
   // Read the block contents as well as the type/crc footer.
   // See table_builder.cc for the code that built this structure.
   size_t n = static_cast<size_t>(handle.size());
-  char* buf = new char[n + kBlockTrailerSize];
+  uint64_t len = n + kBlockTrailerSize;
+  char* buf = new char[len];
   Slice contents;
-  Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, buf);
+  uint64_t size = file[0]->size_;
+  int stripe_length = (size / 4) + 1;
+  int start_filenum = handle.offset() / stripe_length;
+  int start_off = handle.offset() % stripe_length;
+  int end_filenum = (handle.offset() + len)/ stripe_length;
+  int end_off = (handle.offset() + len) % stripe_length;
+  Status s;
+  if(start_filenum == end_filenum)
+    s = file[start_filenum]->Read(start_off,len,&contents,buf);
+  else
+  {
+    s = file[start_filenum]->Read(start_off,stripe_length-start_off,&contents,buf);
+    s = file[end_filenum]->Read(0,end_off,&contents,buf+stripe_length-start_off);
+    contents = Slice(buf,len);
+  }
   if (!s.ok()) {
     delete[] buf;
     return s;
   }
-  if (contents.size() != n + kBlockTrailerSize) {
+  if (contents.size() != len) {
     delete[] buf;
     return Status::Corruption("truncated block read");
   }

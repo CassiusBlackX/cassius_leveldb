@@ -9,17 +9,23 @@
 #include "leveldb/table.h"
 #include "util/coding.h"
 
+#define ec_m 6
+#define ec_k 4
+#define ec_p (ec_m - ec_k)
+
 namespace leveldb {
 
 struct TableAndFile {
-  RandomAccessFile* file;
+  RandomAccessFile** file;
   Table* table;
 };
 
 static void DeleteEntry(const Slice& key, void* value) {
   TableAndFile* tf = reinterpret_cast<TableAndFile*>(value);
   delete tf->table;
-  delete tf->file;
+  for(int i=0;i<ec_m;i++)
+    delete tf->file[i];
+  free(tf->file);
   delete tf;
 }
 
@@ -47,22 +53,30 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
   *handle = cache_->Lookup(key);
   if (*handle == nullptr) {
     std::string fname = TableFileName(dbname_, file_number);
-    RandomAccessFile* file = nullptr;
+    RandomAccessFile** file = (RandomAccessFile **)malloc(sizeof(RandomAccessFile *) * ec_m);
     Table* table = nullptr;
-    s = env_->NewRandomAccessFile(fname, &file);
-    if (!s.ok()) {
-      std::string old_fname = SSTTableFileName(dbname_, file_number);
-      if (env_->NewRandomAccessFile(old_fname, &file).ok()) {
-        s = Status::OK();
+    if(1) {
+      std::string fname_new = fname + "tmp";
+      int point = fname.find('.'); 
+      fname_new[point] = '\0';
+      for(int i=0;i<ec_m;i++)
+      {
+        fname_new[point] = '_';
+        fname_new[point+1] = i+48;
+        fname_new[point+2] = '.';
+        fname_new[point+3] = 'l';
+        fname_new[point+4] = 'd';
+        fname_new[point+5] = 'b';
+        fname_new[point+6] = '\0';
+        s = env_->NewRandomAccessFile(fname_new, &file[i]); 
       }
-    }
-    if (s.ok()) {
       s = Table::Open(options_, file, file_size, &table);
     }
-
     if (!s.ok()) {
       assert(table == nullptr);
-      delete file;
+      for(int i=0;i<ec_m;i++)
+        delete file[i];
+      free(file);
       // We do not cache error results so that if the error is transient,
       // or somebody repairs the file, we recover automatically.
     } else {

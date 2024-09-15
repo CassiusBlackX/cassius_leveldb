@@ -11,6 +11,7 @@
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/iterator.h"
+#include "iostream"
 
 namespace leveldb {
 
@@ -19,11 +20,25 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
   Status s;
   meta->file_size = 0;
   iter->SeekToFirst();
-
   std::string fname = TableFileName(dbname, meta->number);
   if (iter->Valid()) {
-    WritableFile* file;
-    s = env->NewWritableFile(fname, &file);
+    WritableFile** file = (WritableFile **)malloc(sizeof(WritableFile *) * ec_m);
+
+    char fname_new[30];
+    int point = 0; 
+    for(point=0;fname[point]!='.';point++)
+      fname_new[point] = fname[point];
+    fname_new[point] = '_';
+    fname_new[point+2] = '.';
+    fname_new[point+3] = 'l';
+    fname_new[point+4] = 'd';
+    fname_new[point+5] = 'b';
+    fname_new[point+6] = '\0';
+    for(int i=0;i<ec_m;i++)
+    {
+      fname_new[point+1] = char(i+48);
+      s = env->NewWritableFile(std::string(fname_new,point+6), &file[i]); 
+    }
     if (!s.ok()) {
       return s;
     }
@@ -38,7 +53,6 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
     if (!key.empty()) {
       meta->largest.DecodeFrom(key);
     }
-
     // Finish and check for builder errors
     s = builder->Finish();
     if (s.ok()) {
@@ -46,16 +60,20 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
       assert(meta->file_size > 0);
     }
     delete builder;
-
     // Finish and check for file errors
     if (s.ok()) {
-      s = file->Sync();
+      for(int i=0;i<ec_m;i++)
+        s = file[i]->Sync();
     }
     if (s.ok()) {
-      s = file->Close();
+      for(int i=0;i<ec_m;i++)
+        s = file[i]->Close();
     }
-    delete file;
-    file = nullptr;
+    for(int i=0;i<ec_m;i++)
+    {
+      delete file[i];
+      file[i] = nullptr;
+    }
 
     if (s.ok()) {
       // Verify that the table is usable

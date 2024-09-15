@@ -280,7 +280,6 @@ Cache::Handle* LRUCache::Insert(const Slice& key, uint32_t hash, void* value,
   e->in_cache = false;
   e->refs = 1;  // for the returned handle.
   std::memcpy(e->key_data, key.data(), key.size());
-
   if (capacity_ > 0) {
     e->refs++;  // for the cache's reference.
     e->in_cache = true;

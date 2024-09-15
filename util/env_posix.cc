@@ -262,10 +262,12 @@ class PosixMmapReadableFile final : public RandomAccessFile {
       *result = Slice();
       return PosixError(filename_, EINVAL);
     }
-
+    std::memcpy(scratch,mmap_base_ + offset,n);
     *result = Slice(mmap_base_ + offset, n);
     return Status::OK();
   }
+
+  uint64_t size_;
 
  private:
   char* const mmap_base_;

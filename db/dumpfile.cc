@@ -146,11 +146,27 @@ Status DumpDescriptor(Env* env, const std::string& fname, WritableFile* dst) {
 
 Status DumpTable(Env* env, const std::string& fname, WritableFile* dst) {
   uint64_t file_size;
-  RandomAccessFile* file = nullptr;
+  RandomAccessFile* file[ec_m+1];
   Table* table = nullptr;
   Status s = env->GetFileSize(fname, &file_size);
   if (s.ok()) {
-    s = env->NewRandomAccessFile(fname, &file);
+    s = env->NewRandomAccessFile(fname, &file[0]);
+    std::string fname_new = fname + "tmp";
+      int point = 0; 
+      for(point=0;fname[point]!='.';point++)
+        fname_new[point] = fname[point];
+      fname_new[point] = '\0';
+      for(int i=1;i<ec_m+1;i++)
+      {
+        fname_new[point] = '_';
+        fname_new[point+1] = i+48;
+        fname_new[point+2] = '.';
+        fname_new[point+3] = 'l';
+        fname_new[point+4] = 'd';
+        fname_new[point+5] = 'b';
+        fname_new[point+6] = '\0';
+        s = env->NewRandomAccessFile(fname_new, &file[i]);  
+      }
   }
   if (s.ok()) {
     // We use the default comparator, which may or may not match the
