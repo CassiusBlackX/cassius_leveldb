@@ -98,14 +98,26 @@ target_compile_definitions(trace_kv PRIVATE
     LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
 )
 
-# benchmark_zal
-add_executable(benchmark_zal ${CMAKE_CURRENT_SOURCE_DIR}/src/benchmark_zal.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
-target_link_libraries(benchmark_zal pthread)
-target_compile_definitions(benchmark_zal PRIVATE 
-    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
+# check_dbs_behavior
+add_executable(check_dbs_behavior ${CMAKE_CURRENT_SOURCE_DIR}/src/check_dbs_behavior.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
+target_link_libraries(check_dbs_behavior pthread)
+target_compile_definitions(check_dbs_behavior PRIVATE 
+    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
     ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
-    INTER_WRITE  # if `INTER_WRITE` is defined, then we will write a couple of ldb files in one time
+    PRINT_LEVEL  # if `PRINT_LEVEL` is defined, then a lot of log infos will be compiled
+    TRACE_KV  # if `TRACE_KV` is defined, then we will trace the kvs
+    LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
 )
+
+
+# benchmark_zal
+# add_executable(benchmark_zal ${CMAKE_CURRENT_SOURCE_DIR}/src/benchmark_zal.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
+# target_link_libraries(benchmark_zal pthread)
+# target_compile_definitions(benchmark_zal PRIVATE 
+#     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
+#     ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
+#     INTER_WRITE  # if `INTER_WRITE` is defined, then we will write a couple of ldb files in one time
+# )
 
 # dummy_test
 add_executable(dummy_test ${CMAKE_CURRENT_SOURCE_DIR}/src/dummy_test.cpp 
