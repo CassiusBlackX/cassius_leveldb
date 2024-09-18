@@ -11,7 +11,7 @@
 
 #include "zal_utils.h"
 
-static const size_t VALID_KEYS_COUNT = 100000;
+static const size_t VALID_KEYS_COUNT = 1e5;
 static const double MODIFY_RATIO = 0.35;
 static const double READ_RATIO = 0.55;
 static const size_t RECENT = 1e5;
@@ -21,19 +21,6 @@ zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> tsQueue_key_table(VA
 zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> trace_4571(800);
 zal_utils::ThreadSafeQueue<zal_utils::table_range> table_range(800);
 
-std::string UnescapeString(const std::string& str) {
-    // 这里假设 EscapeString 只是简单地转义了单引号
-    std::string result;
-    for (size_t i = 0; i < str.size(); ++i) {
-        if (str[i] == '\\' && i + 1 < str.size() && str[i + 1] == '\'') {
-            result += '\'';
-            ++i; // 跳过转义字符
-        } else {
-            result += str[i];
-        }
-    }
-    return result;
-}
 
 std::deque<zal_utils::CSnapshot> snapshots1;
 std::deque<zal_utils::CSnapshot> snapshots2;
@@ -41,7 +28,6 @@ std::unordered_map<std::string, std::queue<int>> key_table;
 
 
 int main() {
-    std::cout << "this is the newest version" << std::endl;
     std::mt19937 rng(44);
     std::uniform_int_distribution<int> dist(0, VALID_KEYS_COUNT-1);
 
@@ -157,7 +143,7 @@ int main() {
                     std::cerr << "key= " << key << " from db2 is correct, which is " << value2 << " while db1 is wrong with the value of " << value1 << std::endl;
                 }
                 else {
-                    std::cerr << "key= " << key << "from both dbs are wrong, which is respectively value1: " << value1 << " and value2: " << value2 << std::endl;
+                    std::cerr << "key= " << key << " from both dbs are wrong, which is respectively value1: " << value1 << " and value2: " << value2 << std::endl;
                 }
                 return 3;
             }
@@ -193,5 +179,6 @@ int main() {
 }
 
 // sst直接生成的就不一样  --> 同时维护两个数据库，然后比较两个数据库是否行为一致
-// sst是一开始一样的,但是compaction之后就不一样了  // TODO 那么就要在触发compaction之前停止
+// sst是一开始一样的,但是compaction之后就不一样了  
+// above solved, 仍然是`AddBoundaryInputs`函数的问题，使用原版函数的话，两个db的行为会始终一致。但是如果让`AddBoundaryInputs`函数失去功能的话，两个db的行为就会变得不一致！
 // 记录每个sst时候的key的范围 done

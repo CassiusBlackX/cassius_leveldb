@@ -24,6 +24,12 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/)
 # message(STATUS "Boost include directories: ${Boost_INCLUDE_DIRS}")
 # message(STATUS "Boost libraries: ${Boost_LIBRARIES}")
 
+# # find openssl package
+# find_package(OpenSSL REQUIRED)
+# message(STATUS "OpenSSL version: ${OPENSSL_VERSION}")
+# message(STATUS "OpenSSL include directories: ${OPENSSL_INCLUDE_DIR}")
+# message(STATUS "OpenSSL libraries: ${OPENSSL_LIBRARIES}")
+
 # leveldb的源文件
 set(LEVELDB_SOURCES 
     ${LEVELDB_ROOT_DIR}/db/builder.cc
@@ -103,12 +109,11 @@ add_executable(check_dbs_behavior ${CMAKE_CURRENT_SOURCE_DIR}/src/check_dbs_beha
 target_link_libraries(check_dbs_behavior pthread)
 target_compile_definitions(check_dbs_behavior PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
-    ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
-    PRINT_LEVEL  # if `PRINT_LEVEL` is defined, then a lot of log infos will be compiled
-    TRACE_KV  # if `TRACE_KV` is defined, then we will trace the kvs
-    LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
+    # ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
+    # PRINT_LEVEL  # if `PRINT_LEVEL` is defined, then a lot of log infos will be compiled
+    # TRACE_KV  # if `TRACE_KV` is defined, then we will trace the kvs
+    # LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
 )
-
 
 # benchmark_zal
 # add_executable(benchmark_zal ${CMAKE_CURRENT_SOURCE_DIR}/src/benchmark_zal.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})

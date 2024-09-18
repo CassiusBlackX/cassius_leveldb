@@ -7,7 +7,6 @@
 #include <string>
 #include <map>
 #include <chrono>
-#include <memory>
 #include <leveldb/db.h>
 #include <random>
 
@@ -82,9 +81,9 @@ private:
 class FunctionTimer{
 public:
     FunctionTimer(const std::string& function_name);
+    FunctionTimer(const FunctionTimer& parent, const std::string& process_name);
     ~FunctionTimer();
     static void printTotalTimes();
-    std::unique_ptr<FunctionTimer> createFunctionTimer(const std::string& function_name);
     static void clearMap();
 
 private:
