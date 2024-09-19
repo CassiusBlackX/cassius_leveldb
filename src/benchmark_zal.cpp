@@ -10,7 +10,7 @@
 
 #include "zal_utils.h"
 
-static const size_t KEYS = 1e6;
+static const size_t KEYS = 1e7;
 static const size_t READS = 1e3;
 
 int main(){
@@ -60,3 +60,5 @@ int main(){
     zal_utils::FunctionTimer::printTotalTimes();
     return 0;
 }
+
+// BUG: 目前使用的timer来计时是不合理的。这里使用的timer最后打印出来的内容只是每个函数最后一次调用时候的时间，因为使用的是map来存储，所以之前几次的时间会被替代掉了！

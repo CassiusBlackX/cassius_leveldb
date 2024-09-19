@@ -63,6 +63,7 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
     delete builder;
     #ifdef ZAL_TIMER
     delete TableBuilder_timer;
+    zal_utils::FunctionTimer* BuildTable_FileCheck_timer = new zal_utils::FunctionTimer(BuildTable_timer, "FileCheck");
     #endif
 
     // Finish and check for file errors
@@ -82,6 +83,9 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
       s = it->status();
       delete it;
     }
+    #ifdef ZAL_TIMER
+    delete BuildTable_FileCheck_timer;
+    #endif
   }
 
   // Check for input iterator errors
