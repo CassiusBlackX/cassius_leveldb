@@ -3,13 +3,13 @@ cmake_minimum_required(VERSION 3.10)
 # 设置项目名称
 project(test_leveldb)
 
-# set(${CMAKE_TOOLCHAIN_FILE} "D:/Application/vcpkg/scripts/buildsystems/vcpkg.cmake")
+set(${CMAKE_TOOLCHAIN_FILE} "D:/Application/vcpkg/scripts/buildsystems/vcpkg.cmake")
 
 # 设置C++标准
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-set(LEVELDB_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(LEVELDB_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/")
 
 # 包含leveldb的头文件
 include_directories(${LEVELDB_ROOT_DIR})
@@ -23,12 +23,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/)
 # message(STATUS "Boost version: ${Boost_VERSION}")
 # message(STATUS "Boost include directories: ${Boost_INCLUDE_DIRS}")
 # message(STATUS "Boost libraries: ${Boost_LIBRARIES}")
-
-# # find openssl package
-# find_package(OpenSSL REQUIRED)
-# message(STATUS "OpenSSL version: ${OPENSSL_VERSION}")
-# message(STATUS "OpenSSL include directories: ${OPENSSL_INCLUDE_DIR}")
-# message(STATUS "OpenSSL libraries: ${OPENSSL_LIBRARIES}")
 
 # leveldb的源文件
 set(LEVELDB_SOURCES 
@@ -104,25 +98,16 @@ target_compile_definitions(trace_kv PRIVATE
     LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
 )
 
-# check_dbs_behavior
-add_executable(check_dbs_behavior ${CMAKE_CURRENT_SOURCE_DIR}/src/check_dbs_behavior.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
-target_link_libraries(check_dbs_behavior pthread)
-target_compile_definitions(check_dbs_behavior PRIVATE 
-    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
-    # ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
-    # PRINT_LEVEL  # if `PRINT_LEVEL` is defined, then a lot of log infos will be compiled
-    # TRACE_KV  # if `TRACE_KV` is defined, then we will trace the kvs
-    # LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
-)
-
 # benchmark_zal
-# add_executable(benchmark_zal ${CMAKE_CURRENT_SOURCE_DIR}/src/benchmark_zal.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
-# target_link_libraries(benchmark_zal pthread)
-# target_compile_definitions(benchmark_zal PRIVATE 
-#     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
-#     ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
-#     INTER_WRITE  # if `INTER_WRITE` is defined, then we will write a couple of ldb files in one time
-# )
+add_executable(benchmark_zal ${CMAKE_CURRENT_SOURCE_DIR}/src/benchmark_zal.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
+target_link_libraries(benchmark_zal pthread
+    isal
+)
+target_compile_definitions(benchmark_zal PRIVATE 
+    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
+    ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
+    ZAL_TIMER. # if `ZAL_TIMER` is defined, then we will have `FunctionTimer` counting the time
+)
 
 # dummy_test
 add_executable(dummy_test ${CMAKE_CURRENT_SOURCE_DIR}/src/dummy_test.cpp 

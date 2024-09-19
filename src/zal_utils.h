@@ -12,7 +12,7 @@
 
 namespace zal_utils {
 /// gen_kv
-std::string gen_value(std::mt19937& rng);
+std::string gen_value(std::mt19937& rng, size_t len);
 std::string gen_key(size_t index);
 
 /// thread_safe_queue
@@ -81,7 +81,7 @@ private:
 class FunctionTimer{
 public:
     FunctionTimer(const std::string& function_name);
-    FunctionTimer(const FunctionTimer& parent, const std::string& process_name);
+    FunctionTimer(const FunctionTimer* parent, const std::string& process_name);
     ~FunctionTimer();
     static void printTotalTimes();
     static void clearMap();
@@ -89,6 +89,7 @@ public:
 private:
     static std::map<std::string, long long> total_times;
     std::string function_name_;
+    static std::map<std::string, size_t> called_times;  // how many times has the same function been called.
     std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
 };
 

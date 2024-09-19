@@ -17,10 +17,17 @@
 extern zal_utils::ThreadSafeQueue<zal_utils::table_range> table_range;
 #endif
 
+#ifdef ZAL_TIMER
+#include "zal_utils.h"
+#endif
+
 namespace leveldb {
 
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
                   TableCache* table_cache, Iterator* iter, FileMetaData* meta) {
+  #ifdef ZAL_TIMER
+  zal_utils::FunctionTimer* BuildTable_timer = new zal_utils::FunctionTimer("BuildTable");
+  #endif
   Status s;
   meta->file_size = 0;
   iter->SeekToFirst();
@@ -33,6 +40,9 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
       return s;
     }
 
+    #ifdef ZAL_TIMER
+    zal_utils::FunctionTimer* TableBuilder_timer = new zal_utils::FunctionTimer(BuildTable_timer, "TableBuilder");
+    #endif
     TableBuilder* builder = new TableBuilder(options, file);
     meta->smallest.DecodeFrom(iter->key());
     Slice key;
@@ -51,6 +61,9 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
       assert(meta->file_size > 0);
     }
     delete builder;
+    #ifdef ZAL_TIMER
+    delete TableBuilder_timer;
+    #endif
 
     // Finish and check for file errors
     if (s.ok()) {
@@ -84,6 +97,9 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
 
   #ifdef TRACE_KV
   table_range.push(zal_utils::table_range(meta->number, meta->smallest.user_key().ToString(), meta->largest.user_key().ToString()));
+  #endif
+  #ifdef ZAL_TIMER
+  delete BuildTable_timer;
   #endif
   return s;
 }

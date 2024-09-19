@@ -4,9 +4,9 @@ namespace zal_utils {
 FunctionTimer::FunctionTimer(const std::string& function_name) : function_name_(function_name) {
     start_time = std::chrono::high_resolution_clock::now();
 }
-FunctionTimer::FunctionTimer(const FunctionTimer& parent, const std::string& process_name) {
+FunctionTimer::FunctionTimer(const FunctionTimer* parent, const std::string& process_name) {
     start_time = std::chrono::high_resolution_clock::now();
-    function_name_ = parent.function_name_ + "::" + process_name;
+    function_name_ = parent->function_name_ + "::" + process_name;
 }
 
 

@@ -16,6 +16,9 @@
 #include "util/coding.h"
 #include "util/crc32c.h"
 
+#ifdef ZAL_TIMER
+#include "zal_utils.h"
+#endif
 namespace leveldb {
 
 struct TableBuilder::Rep {
@@ -211,6 +214,9 @@ void TableBuilder::WriteRawBlock(const Slice& block_contents,
 Status TableBuilder::status() const { return rep_->status; }
 
 Status TableBuilder::Finish() {
+  #ifdef ZAL_TIMER
+  zal_utils::FunctionTimer* TableBuilder_Finish_timer = new zal_utils::FunctionTimer("TableBuilder_Finish@independent");
+  #endif
   Rep* r = rep_;
   Flush();
   assert(!r->closed);
@@ -264,6 +270,9 @@ Status TableBuilder::Finish() {
       r->offset += footer_encoding.size();
     }
   }
+  #ifdef ZAL_TIMER
+  delete TableBuilder_Finish_timer;
+  #endif
   return r->status;
 }
 
