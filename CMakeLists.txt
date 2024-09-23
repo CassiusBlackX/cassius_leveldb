@@ -93,7 +93,7 @@ target_link_libraries(trace_kv pthread)
 target_compile_definitions(trace_kv PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
     ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
-    PRINT_LEVEL  # if `PRINT_LEVEL` is defined, then a lot of log infos will be compiled
+    # PRINT_LEVEL  # if `PRINT_LEVEL` is defined, then a lot of log infos will be compiled
     TRACE_KV  # if `TRACE_KV` is defined, then we will trace the kvs
     LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
 )

@@ -68,7 +68,7 @@ int main() {
 
     for(size_t i = 0; i < VALID_KEYS_COUNT; i++) {
         const std::string& key = zal_utils::gen_key(i);
-        const std::string& value = zal_utils::gen_value(rng);
+        const std::string& value = zal_utils::gen_value(rng, 16);
         store[key] = value;
         status = db->Put(write_options, key, value);
         if (!status.ok()) {
@@ -88,7 +88,7 @@ int main() {
         for(size_t j=0;j<modifies;j++) {
             const size_t index = dist(rng);
             const std::string& key = zal_utils::gen_key(index);
-            const std::string& value = zal_utils::gen_value(rng);
+            const std::string& value = zal_utils::gen_value(rng, 16);
             store[key] = value;
             status = db->Put(write_options, key, value);
             if (!status.ok()) {
@@ -142,14 +142,14 @@ int main() {
             if (value != store[key]) {
                 std::cerr << "Value MISMATCH key= " << key << ", expected Value=" << store[key] << ", Get Value=" << value << std::endl;
                 std::queue<int> target = key_table[key];
-                std::cerr << "key=" << key << " was once stored in " << target.size() << " sstabls" << std::endl;
+                std::cerr << "key=" << key << " was once stored in " << target.size() << " sstabls' boundary" << std::endl;
                 for (auto it = target; !it.empty(); it.pop()) {
                     std::cerr << it.front() << " ";
                 }
                 std::cerr << std::endl;
                 
                 for (auto it = table_ranges.begin(); it != table_ranges.end(); it++) {
-                    if (it->smallest <= key && key < it->largest) {
+                    if (it->smallest <= key && key <= it->largest) {
                         std::cerr << "key=" << key << " was once stored in table " << it->index << std::endl;
                     }
                 }
