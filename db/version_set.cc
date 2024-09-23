@@ -22,6 +22,7 @@
 #ifdef TRACE_KV
 #include "zal_utils.h"
 extern zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> tsQueue_key_table;
+extern zal_utils::ThreadSafeQueue<zal_utils::table_range> table_range;
 #endif
 
 namespace leveldb {
@@ -1340,6 +1341,7 @@ bool FindLargestKey(const InternalKeyComparator& icmp,
   *largest_key = files[0]->largest;
   #ifdef TRACE_KV
   size_t number = files[0]->number;
+  size_t index = 0;
   #endif
   for (size_t i = 1; i < files.size(); ++i) {
     FileMetaData* f = files[i];
@@ -1347,11 +1349,13 @@ bool FindLargestKey(const InternalKeyComparator& icmp,
       *largest_key = f->largest;
       #ifdef TRACE_KV
       number = f->number;
+      index = i;
       #endif
     }
   }
   #ifdef TRACE_KV
   tsQueue_key_table.push(std::make_tuple(largest_key->user_key().ToString(), number));
+  table_range.push(zal_utils::table_range(number, (*files[index]).smallest.user_key()->ToString(), (*files[index]).largest.user_key()->smallest.ToString()));
   #endif
   return true;
 }
@@ -1374,6 +1378,7 @@ FileMetaData* FindSmallestBoundaryFile(
         smallest_boundary_file = f;
         #ifdef TRACE_KV
         tsQueue_key_table.push(std::make_tuple(f->smallest.user_key().ToString(), f->number));
+        table_range.push(zal_utils::table_range(f->number,f->smallest.user_key().ToString(), f->largest.user_key().ToString()));
         #endif
       }
     }

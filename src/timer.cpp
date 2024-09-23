@@ -13,19 +13,21 @@ FunctionTimer::FunctionTimer(const FunctionTimer* parent, const std::string& pro
 FunctionTimer::~FunctionTimer() {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    total_times[function_name_] += duration.count();
+    total_time[function_name_] = total_time.contains(function_name_) ? total_time[function_name_] + duration.count() : duration.count();
 }
 
 void FunctionTimer::printTotalTimes() {
-    std::cout << total_times.size() << std::endl;
-    for (const auto& entry : total_times) {
+    std::cout << total_time.size() << std::endl;
+    for (const auto& entry : total_time) {
         std::cout << "Total time spent in " << entry.first << "(): " << entry.second << " milliseconds." << std::endl;
     }
 }
 
 void FunctionTimer::clearMap() {
-    total_times.clear();
+    total_time.clear();
 }
 
-std::map<std::string, long long> FunctionTimer::total_times;
+std::map<std::string, long long> FunctionTimer::total_time;
 }
+
+// TODO 修改timer的逻辑,记录一个函数一次调用的时间

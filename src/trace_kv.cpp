@@ -68,7 +68,7 @@ int main() {
 
     for(size_t i = 0; i < VALID_KEYS_COUNT; i++) {
         const std::string& key = zal_utils::gen_key(i);
-        const std::string& value = zal_utils::gen_value(rng);
+        const std::string& value = zal_utils::gen_value(rng, 16);
         store[key] = value;
         status = db->Put(write_options, key, value);
         if (!status.ok()) {
@@ -88,7 +88,7 @@ int main() {
         for(size_t j=0;j<modifies;j++) {
             const size_t index = dist(rng);
             const std::string& key = zal_utils::gen_key(index);
-            const std::string& value = zal_utils::gen_value(rng);
+            const std::string& value = zal_utils::gen_value(rng, 16);
             store[key] = value;
             status = db->Put(write_options, key, value);
             if (!status.ok()) {
@@ -147,9 +147,10 @@ int main() {
                     std::cerr << it.front() << " ";
                 }
                 std::cerr << std::endl;
+                std::this_thread::sleep_for(std::chrono::seconds(5));
                 
                 for (auto it = table_ranges.begin(); it != table_ranges.end(); it++) {
-                    if (it->smallest <= key && key < it->largest) {
+                    if (it->smallest <= key && key <= it->largest) {
                         std::cerr << "key=" << key << " was once stored in table " << it->index << std::endl;
                     }
                 }
@@ -172,3 +173,5 @@ int main() {
 // sst直接生成的就不一样
 // sst是一开始一样的,但是compaction之后就不一样了
 // 记录每个sst时候的key的范围
+
+// 问题: 记录table range 不能在builder.cc里面,因为当compaction的时候是不在builder里的!

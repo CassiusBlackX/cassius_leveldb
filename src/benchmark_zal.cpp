@@ -10,7 +10,7 @@
 
 #include "zal_utils.h"
 
-static const size_t KEYS = 1e7;
+static const size_t KEYS = 1e6;
 static const size_t READS = 1e3;
 
 int main(){
