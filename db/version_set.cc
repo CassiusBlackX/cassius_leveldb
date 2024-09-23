@@ -1355,7 +1355,7 @@ bool FindLargestKey(const InternalKeyComparator& icmp,
   }
   #ifdef TRACE_KV
   tsQueue_key_table.push(std::make_tuple(largest_key->user_key().ToString(), number));
-  table_range.push(zal_utils::table_range(number, (*files[index]).smallest.user_key()->ToString(), (*files[index]).largest.user_key()->smallest.ToString()));
+  // table_range.push(zal_utils::table_range(number, files[index]->smallest.user_key().ToString(), files[index]->largest.user_key().ToString()));
   #endif
   return true;
 }
@@ -1376,13 +1376,14 @@ FileMetaData* FindSmallestBoundaryFile(
       if (smallest_boundary_file == nullptr ||
           icmp.Compare(f->smallest, smallest_boundary_file->smallest) < 0) {
         smallest_boundary_file = f;
-        #ifdef TRACE_KV
-        tsQueue_key_table.push(std::make_tuple(f->smallest.user_key().ToString(), f->number));
-        table_range.push(zal_utils::table_range(f->number,f->smallest.user_key().ToString(), f->largest.user_key().ToString()));
-        #endif
       }
     }
   }
+  #ifdef TRACE_KV
+  tsQueue_key_table.push(std::make_tuple(smallest_boundary_file->smallest.user_key().ToString(), smallest_boundary_file->number));
+  // table_range.push(zal_utils::table_range(smallest_boundary_file->number,smallest_boundary_file->smallest.user_key().ToString(), smallest_boundary_file->largest.user_key().ToString()));
+  #endif
+
   return smallest_boundary_file;
 }
 

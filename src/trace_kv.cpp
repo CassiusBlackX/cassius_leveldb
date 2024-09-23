@@ -18,7 +18,7 @@ static const size_t RECENT = 1e5;
 static const size_t ITERATIONS = 1e3;
 
 zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> tsQueue_key_table(VALID_KEYS_COUNT+1); 
-zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> trace_4571(800);
+
 zal_utils::ThreadSafeQueue<zal_utils::table_range> table_range(800);
 
 std::string UnescapeString(const std::string& str) {
