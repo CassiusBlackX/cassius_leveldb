@@ -23,6 +23,7 @@
 #include "zal_utils.h"
 extern zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> tsQueue_key_table;
 extern zal_utils::ThreadSafeQueue<zal_utils::table_range> table_range;
+extern zal_utils::ThreadSafeQueue<zal_utils::table_range> table_range;
 #endif
 
 namespace leveldb {
@@ -1341,7 +1342,7 @@ bool FindLargestKey(const InternalKeyComparator& icmp,
   *largest_key = files[0]->largest;
   #ifdef TRACE_KV
   size_t number = files[0]->number;
-  size_t index = 0;
+  FileMetaData* largest_key_s_file = nullptr;
   #endif
   for (size_t i = 1; i < files.size(); ++i) {
     FileMetaData* f = files[i];
@@ -1349,13 +1350,15 @@ bool FindLargestKey(const InternalKeyComparator& icmp,
       *largest_key = f->largest;
       #ifdef TRACE_KV
       number = f->number;
-      index = i;
+      largest_key_s_file = f;
       #endif
     }
   }
   #ifdef TRACE_KV
   tsQueue_key_table.push(std::make_tuple(largest_key->user_key().ToString(), number));
-  // table_range.push(zal_utils::table_range(number, files[index]->smallest.user_key().ToString(), files[index]->largest.user_key().ToString()));
+  if (largest_key_s_file != nullptr) {
+    table_range.push(zal_utils::table_range(number, largest_key_s_file->smallest.user_key().ToString(), largest_key_s_file->largest.user_key().ToString()));
+  } 
   #endif
   return true;
 }
@@ -1380,10 +1383,11 @@ FileMetaData* FindSmallestBoundaryFile(
     }
   }
   #ifdef TRACE_KV
-  tsQueue_key_table.push(std::make_tuple(smallest_boundary_file->smallest.user_key().ToString(), smallest_boundary_file->number));
-  // table_range.push(zal_utils::table_range(smallest_boundary_file->number,smallest_boundary_file->smallest.user_key().ToString(), smallest_boundary_file->largest.user_key().ToString()));
+  if (smallest_boundary_file != nullptr) {
+      tsQueue_key_table.push(std::make_tuple(smallest_boundary_file->smallest.user_key().ToString(), smallest_boundary_file->number));
+    table_range.push((zal_utils::table_range(smallest_boundary_file->number, smallest_boundary_file->smallest.user_key().ToString(), smallest_boundary_file->largest.user_key().ToString())));
+  }
   #endif
-
   return smallest_boundary_file;
 }
 

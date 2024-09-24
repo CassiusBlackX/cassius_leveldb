@@ -142,7 +142,7 @@ int main() {
             if (value != store[key]) {
                 std::cerr << "Value MISMATCH key= " << key << ", expected Value=" << store[key] << ", Get Value=" << value << std::endl;
                 std::queue<int> target = key_table[key];
-                std::cerr << "key=" << key << " was once stored in " << target.size() << " sstabls" << std::endl;
+                std::cerr << "key=" << key << " was once stored in " << target.size() << " sstabls' boundary" << std::endl;
                 for (auto it = target; !it.empty(); it.pop()) {
                     std::cerr << it.front() << " ";
                 }
