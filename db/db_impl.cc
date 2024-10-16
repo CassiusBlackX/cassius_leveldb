@@ -35,6 +35,11 @@
 #include "util/logging.h"
 #include "util/mutexlock.h"
 
+#ifdef LOG_SST
+extern zal_utils::ThreadSafeQueue<zal_utils::compaction_info> compaction_info_queue;
+extern size_t compaction_info_index;
+#endif
+
 namespace leveldb {
 
 const int kNumNonTableCacheFiles = 10;
@@ -882,6 +887,11 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
       compact->compaction->num_input_files(0), compact->compaction->level(),
       compact->compaction->num_input_files(1), compact->compaction->level() + 1,
       static_cast<long long>(compact->total_bytes));
+  #ifdef LOG_SST
+  zal_utils::compaction_info info;
+  info.index = compaction_info_index++;
+  info.source = compact->compaction->GetTabelInfo();;
+  #endif
 
   // Add compaction outputs
   compact->compaction->AddInputDeletions(compact->compaction->edit());
@@ -890,7 +900,13 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
     const CompactionState::Output& out = compact->outputs[i];
     compact->compaction->edit()->AddFile(level + 1, out.number, out.file_size,
                                          out.smallest, out.largest);
+    #ifdef LOG_SST
+    info.target.emplace_back(static_cast<unsigned>(out.number), static_cast<unsigned>(level+1), out.smallest.user_key().ToString(), out.largest.user_key().ToString(), out.file_size);
+    #endif
   }
+  #ifdef LOG_SST
+  compaction_info_queue.push(info);
+  #endif
   return versions_->LogAndApply(compact->compaction->edit(), &mutex_);
 }
 

@@ -1,19 +1,20 @@
 #include "zal_utils.h"
 
 namespace zal_utils {
-FunctionTimer::FunctionTimer(const std::string& function_name) : function_name_(function_name) {
+FunctionTimer::FunctionTimer(const std::string& function_name) : function_name_(function_name){
     start_time = std::chrono::high_resolution_clock::now();
 }
-FunctionTimer::FunctionTimer(const FunctionTimer* parent, const std::string& process_name) {
+FunctionTimer::FunctionTimer(const FunctionTimer* parent, const std::string& process_name){
     start_time = std::chrono::high_resolution_clock::now();
     function_name_ = parent->function_name_ + "::" + process_name;
+
 }
 
 
 FunctionTimer::~FunctionTimer() {
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    total_time[function_name_] = total_time.contains(function_name_) ? total_time[function_name_] + duration.count() : duration.count();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    total_time[function_name_] = total_time.contains(function_name_) ? duration : std::max((long long)duration, (long long)total_time[function_name_]);  // BUG 为什么这里必须要我强制类型转换？
 }
 
 void FunctionTimer::printTotalTimes() {
@@ -29,5 +30,3 @@ void FunctionTimer::clearMap() {
 
 std::map<std::string, long long> FunctionTimer::total_time;
 }
-
-// TODO 修改timer的逻辑,记录一个函数一次调用的时间

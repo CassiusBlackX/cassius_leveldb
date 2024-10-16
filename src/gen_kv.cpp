@@ -4,10 +4,20 @@
 #include <random>
 
 namespace zal_utils {
-    std::string gen_key(size_t index) {
+std::string gen_key(size_t index) {
     std::ostringstream s;
     s << index;
     return s.str();
+}
+
+std::string gen_key(size_t index, size_t len) {
+    std::ostringstream s;
+    s << index;
+    std::string key = s.str();
+    if (key.size() < len) {
+        key.resize(len, '0');
+    }
+    return key;
 }
 
 std::string gen_value(std::mt19937& rng, size_t len) {

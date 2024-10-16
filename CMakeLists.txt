@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 # 设置项目名称
 project(test_leveldb)
 
-set(${CMAKE_TOOLCHAIN_FILE} "D:/Application/vcpkg/scripts/buildsystems/vcpkg.cmake")
+# set(${CMAKE_TOOLCHAIN_FILE} "D:/Application/vcpkg/scripts/buildsystems/vcpkg.cmake")
 
 # 设置C++标准
 set(CMAKE_CXX_STANDARD 20)
@@ -16,13 +16,6 @@ include_directories(${LEVELDB_ROOT_DIR})
 include_directories(${LEVELDB_ROOT_DIR}/include)
 include_directories(${LEVELDB_ROOT_DIR}/port/)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/)
-
-# # Find Boost package
-# find_package(Boost REQUIRED COMPONENTS system)
-# # Print information about Boost package
-# message(STATUS "Boost version: ${Boost_VERSION}")
-# message(STATUS "Boost include directories: ${Boost_INCLUDE_DIRS}")
-# message(STATUS "Boost libraries: ${Boost_LIBRARIES}")
 
 # leveldb的源文件
 set(LEVELDB_SOURCES 
@@ -96,6 +89,7 @@ target_compile_definitions(trace_kv PRIVATE
     # PRINT_LEVEL  # if `PRINT_LEVEL` is defined, then a lot of log infos will be compiled
     TRACE_KV  # if `TRACE_KV` is defined, then we will trace the kvs
     LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
+    PRINT_LEVEL
 )
 
 # benchmark_zal
@@ -115,4 +109,13 @@ add_executable(dummy_test ${CMAKE_CURRENT_SOURCE_DIR}/src/dummy_test.cpp
     # ${LEVELDB_SOURCES}
 )
 target_link_libraries(dummy_test pthread)
-# target_compile_definitions()
+
+# log_sst
+add_executable(log_sst ${CMAKE_CURRENT_SOURCE_DIR}/src/log_sst.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
+target_link_libraries(log_sst pthread)
+target_compile_definitions(log_sst PRIVATE 
+    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
+    LOG_SST
+    LOG_COMPACTION
+    # PRINT_LEVEL
+)

@@ -19,7 +19,7 @@ static const size_t ITERATIONS = 1e3;
 
 zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> tsQueue_key_table(VALID_KEYS_COUNT+1); 
 zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> trace_4571(800);
-zal_utils::ThreadSafeQueue<zal_utils::table_range> table_range(800);
+zal_utils::ThreadSafeQueue<zal_utils::build_table_queue> build_table_queue(800);
 
 
 std::deque<zal_utils::CSnapshot> snapshots1;
@@ -52,7 +52,7 @@ int main() {
     // 维持一个有效kv的实际值map, 用于验证读取的正确性
     std::unordered_map<std::string, std::string> store;
     
-    std::vector<zal_utils::table_range> table_ranges;
+    std::vector<zal_utils::build_table_queue> table_ranges;
 
     // store all InternalKeys and their related values
     size_t global_sequnce = 0;  // in leveldb, for every key, adding to the only sequence number
@@ -112,9 +112,9 @@ int main() {
                 }
             }
 
-            if (!table_range.empty()) {
-                std::vector<zal_utils::table_range> messages;
-                table_range.pop_all(messages);
+            if (!build_table_queue.empty()) {
+                std::vector<zal_utils::build_table_queue> messages;
+                build_table_queue.pop_all(messages);
                 for (const auto& message : messages) {
                     table_ranges.push_back(message);
                 }
@@ -157,7 +157,7 @@ int main() {
                 std::cerr << std::endl;
                 
                 for (auto it = table_ranges.begin(); it != table_ranges.end(); it++) {
-                    if (it->smallest <= key && key < it->largest) {
+                    if (it->smallest_key <= key && key < it->largest_key) {
                         std::cerr << "key=" << key << " was once stored in table " << it->index << std::endl;
                     }
                 }

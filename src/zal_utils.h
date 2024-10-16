@@ -1,3 +1,6 @@
+#ifndef ZAL_UTILS_H
+#define ZAL_UTILS_H
+
 #include <iostream>
 #include <thread>
 #include <queue>
@@ -14,6 +17,7 @@ namespace zal_utils {
 /// gen_kv
 std::string gen_value(std::mt19937& rng, size_t len);
 std::string gen_key(size_t index);
+std::string gen_key(size_t index, size_t len);
 
 /// thread_safe_queue
 template <typename T>
@@ -53,6 +57,11 @@ public:
     size_t size() const {
         std::shared_lock<std::shared_mutex> lock(mutex_);
         return queue_.size();
+    }
+
+    bool nearly_full() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return queue_.size() >= capacity_ * 0.9;
     }
 
 private:
@@ -104,17 +113,61 @@ std::string replaceDiskNumber(const std::string& pathStr, unsigned diskNumber);
 /// @return replaced pathString
 std::string replaceDiskNumber(const std::string& pathStr, unsigned diskNumber, int rindex);
 
-struct table_range {
+struct table_info {
     unsigned index;
-    std::string smallest;
-    std::string largest;
+    unsigned level;
+    std::string smallest_key;
+    std::string largest_key;
+    size_t table_size;
 
-    table_range(unsigned index, const std::string& smallest, const std::string& largest) : index(index), smallest(smallest), largest(largest) {}
-    table_range() = default;
+    table_info() = default;
+    table_info(unsigned index, unsigned level, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(level), smallest_key(smallest), largest_key(largest), table_size(size) {}
+    table_info(unsigned index, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(static_cast<unsigned>(-1)), smallest_key(smallest), largest_key(largest), table_size(size) {}
+    bool operator<(const table_info& other) const {
+        return index < other.index;
+    }
 
+    void print() const {
+        if (level == static_cast<unsigned>(-1)) {
+            std::cout << "table " << index << " range: " << smallest_key << " - " << largest_key << " size: " << table_size << std::endl;
+            return;
+        }
+        else {
+            std::cout << "table " << index << " level " << level << " range: " << smallest_key << " - " << largest_key << " size: " << table_size << std::endl;
+        }
+    }
+};
+
+struct compaction_info {
+    std::vector<table_info> source;  // tables to be compacted
+    std::vector<table_info> target;
+    size_t index;
+
+    bool operator<(const compaction_info& other) const {
+        return index < other.index;
+    }
+
+    void print() const {
+        for(int i=0;i<source.size();i++) {
+            std::cout << source[i].index << "@" << source[i].level;
+            if (i != source.size() - 1) {
+                std::cout << " + ";
+            }
+        }
+        std::cout << " ==> ";
+        for(int i=0;i<target.size();i++) {
+            std::cout << target[i].index << "@" << target[i].level;
+            if (i != target.size() - 1) {
+                std::cout << " & ";
+            }
+        }
+        std::cout << std::endl;
+    }
 };
 } // namespace zal_utils
 
 #define ec_m 6
 #define ec_k 4
 #define ec_p (ec_m - ec_k)
+
+#endif

@@ -1,4 +1,3 @@
-#include <sstream>
 #include <fstream>
 #include <filesystem>
 #include <unordered_map>
@@ -6,6 +5,7 @@
 #include <tuple>
 #include <algorithm>
 #include <vector>
+#include <set>
 
 #include <leveldb/db.h>
 
@@ -19,21 +19,7 @@ static const size_t ITERATIONS = 1e3;
 
 zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> tsQueue_key_table(VALID_KEYS_COUNT+1); 
 
-zal_utils::ThreadSafeQueue<zal_utils::table_range> table_range(800);
-
-std::string UnescapeString(const std::string& str) {
-    // 这里假设 EscapeString 只是简单地转义了单引号
-    std::string result;
-    for (size_t i = 0; i < str.size(); ++i) {
-        if (str[i] == '\\' && i + 1 < str.size() && str[i + 1] == '\'') {
-            result += '\'';
-            ++i; // 跳过转义字符
-        } else {
-            result += str[i];
-        }
-    }
-    return result;
-}
+zal_utils::ThreadSafeQueue<zal_utils::build_table_queue> build_table_queue(800);
 
 std::deque<zal_utils::CSnapshot> snapshots;
 std::unordered_map<std::string, std::queue<int>> key_table;
@@ -61,9 +47,9 @@ int main() {
     // 维持一个有效kv的实际值map, 用于验证读取的正确性
     std::unordered_map<std::string, std::string> store;
     
-    std::vector<zal_utils::table_range> table_ranges;
+    // std::vector<zal_utils::build_table_queue> table_ranges; 使用vector在打印的时候数据存在重复
+    std::set<zal_utils::build_table_queue> table_ranges;  
 
-    // store all InternalKeys and their related values
     size_t global_sequnce = 0;  // in leveldb, for every key, adding to the only sequence number
 
     for(size_t i = 0; i < VALID_KEYS_COUNT; i++) {
@@ -119,11 +105,11 @@ int main() {
                 }
             }
 
-            if (!table_range.empty()) {
-                std::vector<zal_utils::table_range> messages;
-                table_range.pop_all(messages);
+            if (!build_table_queue.empty()) {
+                std::vector<zal_utils::build_table_queue> messages;
+                build_table_queue.pop_all(messages);
                 for (const auto& message : messages) {
-                    table_ranges.push_back(message);
+                    table_ranges.insert(message);
                 }
             }
              
@@ -150,9 +136,21 @@ int main() {
                 std::this_thread::sleep_for(std::chrono::seconds(5));
                 
                 for (auto it = table_ranges.begin(); it != table_ranges.end(); it++) {
-                    if (it->smallest <= key && key <= it->largest) {
-                        std::cerr << "key=" << key << " was once stored in table " << it->index << std::endl;
+                    if (it->smallest_key <= key && key <= it->largest_key) {
+                        std::cerr << "key=" << key << " was once stored in table " << it->index;
+                        if (key == it->smallest_key) {
+                            std::cerr << " as the smallest key" << std::endl;
+                        } else if (key == it->largest_key) {
+                            std::cerr << " as the largest key" << std::endl;
+                        } else {
+                            std::cerr << std::endl;
+                        }
                     }
+                }
+
+                // 在遍历一次table_ranges, 展示所有table的边界
+                for (auto it = table_ranges.begin(); it != table_ranges.end(); it++) {
+                    std::cerr << "table " << it->index << " range: " << it->smallest_key << " - " << it->largest_key << std::endl;
                 }
                 return 2;
             }
@@ -174,4 +172,3 @@ int main() {
 // sst是一开始一样的,但是compaction之后就不一样了
 // 记录每个sst时候的key的范围
 
-// 问题: 记录table range 不能在builder.cc里面,因为当compaction的时候是不在builder里的!

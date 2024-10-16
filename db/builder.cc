@@ -15,6 +15,10 @@
 #ifdef ZAL_TIMER
 #include "zal_utils.h"
 #endif
+#ifdef LOG_SST
+#include "zal_utils.h"
+extern zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue;
+#endif
 
 namespace leveldb {
 
@@ -90,6 +94,9 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
 
   if (s.ok() && meta->file_size > 0) {
     // Keep it
+    #ifdef LOG_SST
+    build_table_queue.push(zal_utils::table_info(meta->number, meta->smallest.user_key().ToString(), meta->largest.user_key().ToString(), meta->file_size));
+    #endif
   } else {
     env->RemoveFile(fname);
   }

@@ -24,6 +24,10 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
+#ifdef LOG_SST
+#include "zal_utils.h"
+#endif
+
 namespace leveldb {
 
 namespace log {
@@ -356,6 +360,23 @@ class Compaction {
   // Release the input version for the compaction, once the compaction
   // is successful.
   void ReleaseInputs();
+
+  #ifdef LOG_SST
+  std::vector<zal_utils::table_info> GetTabelInfo() {
+    std::vector<zal_utils::table_info> table_info_;
+    for (int i=0;i<2;i++) {
+      for (int j=0;j<inputs_[i].size();j++) {
+        FileMetaData* file = inputs_[i][j];
+        std::string smallest = file->smallest.user_key().ToString();
+        std::string largest = file->largest.user_key().ToString();
+        size_t size = file->file_size;
+        unsigned level = level_ + i;
+        table_info_.emplace_back(static_cast<unsigned>(file->number), level, smallest, largest, size);
+      }
+    }
+    return table_info_;
+  }
+  #endif
 
  private:
   friend class Version;
