@@ -17,7 +17,7 @@ include_directories(${LEVELDB_ROOT_DIR}/include)
 include_directories(${LEVELDB_ROOT_DIR}/port/)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/)
 
-# leveldb的源文件
+# leveldb source files
 set(LEVELDB_SOURCES 
     ${LEVELDB_ROOT_DIR}/db/builder.cc
     ${LEVELDB_ROOT_DIR}/db/c.cc
@@ -58,6 +58,9 @@ set(LEVELDB_SOURCES
     ${LEVELDB_ROOT_DIR}/util/status.cc
     ${LEVELDB_ROOT_DIR}/helpers/memenv/memenv.cc
 )
+
+# ycsb source
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/ycsb/core YCSB_SOURCES)
 
 # check OS
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
@@ -119,3 +122,11 @@ target_compile_definitions(log_sst PRIVATE
     LOG_COMPACTION
     # PRINT_LEVEL
 )
+
+# ycsb trace
+add_executable(ycsb_trace ${YCDB_SOURCES} ${LEVELDB_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/ycsb_trace.cpp ${UTILS_FILES})
+target_include_directories(ycsb_trace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
+target_compile_definitions(ycsb_trace PRIVATE 
+    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
+)
+target_link_libraries(ycsb_trace pthread)

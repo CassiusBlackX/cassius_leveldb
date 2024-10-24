@@ -37,6 +37,7 @@
 
 #ifdef LOG_SST
 extern zal_utils::ThreadSafeQueue<zal_utils::compaction_info> compaction_info_queue;
+extern zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue;
 extern size_t compaction_info_index;
 #endif
 
@@ -890,7 +891,7 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   #ifdef LOG_SST
   zal_utils::compaction_info info;
   info.index = compaction_info_index++;
-  info.source = compact->compaction->GetTabelInfo();;
+  info.source = compact->compaction->GetTableInfo();;
   #endif
 
   // Add compaction outputs

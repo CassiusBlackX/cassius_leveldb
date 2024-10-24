@@ -95,6 +95,13 @@ Status TableBuilder::ChangeOptions(const Options& options) {
 }
 
 void TableBuilder::Add(const Slice& key, const Slice& value) {
+  #ifdef LOG_SST
+  if (InternalKeyComparator::Compare(key, largest_key_) > 0) {
+    largest_key_ = key;
+  } else if (InternalKeyComparator::Compare(key, smallest_key) < 0) {
+    smallest_key = key;
+  }
+  #endif
   Rep* r = rep_;
   assert(!r->closed);
   if (!ok()) return;

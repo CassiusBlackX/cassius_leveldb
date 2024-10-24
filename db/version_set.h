@@ -362,7 +362,7 @@ class Compaction {
   void ReleaseInputs();
 
   #ifdef LOG_SST
-  std::vector<zal_utils::table_info> GetTabelInfo() {
+  std::vector<zal_utils::table_info> GetTableInfo() {
     std::vector<zal_utils::table_info> table_info_;
     for (int i=0;i<2;i++) {
       for (int j=0;j<inputs_[i].size();j++) {

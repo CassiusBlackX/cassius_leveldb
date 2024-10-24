@@ -872,6 +872,9 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
    printf("\n");
   }
 #endif
+#ifdef LOG_SST
+
+#endif
 
   return s;
 }

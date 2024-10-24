@@ -6,12 +6,14 @@
 
 #include "zal_utils.h"
 
-static constexpr size_t VALID_KEYS_COUNT = 1e5;
-static constexpr size_t ITERATIONS = 1e6;
+static constexpr size_t VALID_KEYS_COUNT = 1e6;
+static constexpr size_t ITERATIONS = 1e9;
 // key 16bytes, val 16bytes, total written 1e6 * 32bytes ~=~ 32MB
 
 size_t compaction_info_index = 0;
 
+// 所有调用builder->Finish()的地方都是在生成sst，所以必须要在每个builder->Finish()的地方记录sst的信息。
+// 但是在builder->Finish()中，无法记录sst的level，所以只能在其它地方记录level。
 zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue(800);
 zal_utils::ThreadSafeQueue<zal_utils::compaction_info> compaction_info_queue(800);
 std::vector<zal_utils::table_info> build_tables;
@@ -85,5 +87,3 @@ int main() {
     return 0;
 
 }
-
-// 似乎不是所有的.ldb文件都是sst文件！所以大概率目前的确已经找到所有的sst文件了
