@@ -116,11 +116,12 @@ target_link_libraries(dummy_test pthread)
 # log_sst
 add_executable(log_sst ${CMAKE_CURRENT_SOURCE_DIR}/src/log_sst.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
 target_link_libraries(log_sst pthread)
+target_include_directories(log_sst PRIVATE ${LEVELDB_ROOT_DIR}/db/)
 target_compile_definitions(log_sst PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
     LOG_SST
     LOG_COMPACTION
-    # PRINT_LEVEL
+    PRINT_LEVEL
 )
 
 # ycsb trace

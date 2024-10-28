@@ -18,6 +18,9 @@
 #include "leveldb/export.h"
 #include "leveldb/options.h"
 #include "leveldb/status.h"
+#ifdef LOG_SST
+#include "leveldb/comparator.h"
+#endif
 
 namespace leveldb {
 
@@ -86,9 +89,6 @@ class LEVELDB_EXPORT TableBuilder {
 
   struct Rep;
   Rep* rep_;
-  #ifdef LOG_SST
-  Slice largest_key_, smallest_key;
-  #endif
 };
 
 }  // namespace leveldb

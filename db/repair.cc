@@ -38,6 +38,11 @@
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 
+#ifdef LOG_SST
+#include "zal_utils.h"
+extern zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue;
+#endif
+
 namespace leveldb {
 
 namespace {
@@ -307,10 +312,20 @@ class Repairer {
     // Copy data.
     Iterator* iter = NewTableIterator(t.meta);
     int counter = 0;
+    #ifdef LOG_SST
+    InternalKey largest_key, smallest_key;
+    // smallest_key.DecodeFrom(t.meta.smallest.Encode());  // TODO we can optionally get smallest and largest in this way
+    smallest_key.DecodeFrom(iter->key());
+    #endif
     for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
       builder->Add(iter->key(), iter->value());
       counter++;
     }
+    #ifdef LOG_SST
+    if (!iter->key().empty()) {
+      largest_key.DecodeFrom(iter->key());
+    }
+    #endif
     delete iter;
 
     ArchiveFile(src);
@@ -321,6 +336,9 @@ class Repairer {
       if (s.ok()) {
         t.meta.file_size = builder->FileSize();
       }
+      #ifdef LOG_SST
+      build_table_queue.push(zal_utils::table_info(t.meta.number, smallest_key.user_key().ToString(), largest_key.user_key().ToString(), t.meta.file_size));
+      #endif
     }
     delete builder;
     builder = nullptr;

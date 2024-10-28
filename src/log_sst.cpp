@@ -7,7 +7,7 @@
 #include "zal_utils.h"
 
 static constexpr size_t VALID_KEYS_COUNT = 1e6;
-static constexpr size_t ITERATIONS = 1e9;
+static constexpr size_t ITERATIONS = 1e6;
 // key 16bytes, val 16bytes, total written 1e6 * 32bytes ~=~ 32MB
 
 size_t compaction_info_index = 0;

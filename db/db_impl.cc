@@ -847,6 +847,9 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   const uint64_t current_entries = compact->builder->NumEntries();
   if (s.ok()) {
     s = compact->builder->Finish();
+    #ifdef LOG_SST
+    build_table_queue.push(zal_utils::table_info(compact->current_output()->number, compact->current_output()->smallest.user_key().ToString(), compact->current_output()->largest.user_key().ToString(), compact->current_output()->file_size));
+    #endif
   } else {
     compact->builder->Abandon();
   }
