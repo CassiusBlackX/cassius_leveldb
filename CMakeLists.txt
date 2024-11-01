@@ -121,11 +121,14 @@ target_compile_definitions(log_sst PRIVATE
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
     LOG_SST
     LOG_COMPACTION
-    PRINT_LEVEL
+    # PRINT_LEVEL
 )
 
 # ycsb trace
-add_executable(ycsb_trace ${YCDB_SOURCES} ${LEVELDB_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/ycsb_trace.cpp ${UTILS_FILES})
+list(FILTER YCSB_SOURCES EXCLUDE REGEX ".*ycsbc.cc$") # exclude ycsbc.cc, write our own main function
+list(APPEND YCSB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/ycsb/leveldbDB.cpp)
+message(STATUS "YCSB_SOURCES: ${YCSB_SOURCES}")
+add_executable(ycsb_trace ${CMAKE_CURRENT_SOURCE_DIR}/src/ycsb_trace.cpp ${YCSB_SOURCES} ${LEVELDB_SOURCES} ${UTILS_FILES})
 target_include_directories(ycsb_trace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
 target_compile_definitions(ycsb_trace PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
