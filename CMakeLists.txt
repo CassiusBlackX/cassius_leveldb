@@ -61,6 +61,9 @@ set(LEVELDB_SOURCES
 
 # ycsb source
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/ycsb/core YCSB_SOURCES)
+list(FILTER YCSB_SOURCES EXCLUDE REGEX ".*ycsbc.cc$") # exclude ycsbc.cc, write our own main function
+list(APPEND YCSB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/ycsb/leveldbDB.cpp)
+message(STATUS "YCSB_SOURCES: ${YCSB_SOURCES}")
 
 # check OS
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
@@ -125,9 +128,6 @@ target_compile_definitions(log_sst PRIVATE
 )
 
 # ycsb trace
-list(FILTER YCSB_SOURCES EXCLUDE REGEX ".*ycsbc.cc$") # exclude ycsbc.cc, write our own main function
-list(APPEND YCSB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/ycsb/leveldbDB.cpp)
-message(STATUS "YCSB_SOURCES: ${YCSB_SOURCES}")
 add_executable(ycsb_trace ${CMAKE_CURRENT_SOURCE_DIR}/src/ycsb_trace.cpp ${YCSB_SOURCES} ${LEVELDB_SOURCES} ${UTILS_FILES})
 target_include_directories(ycsb_trace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
 target_compile_definitions(ycsb_trace PRIVATE 
@@ -137,3 +137,14 @@ target_compile_definitions(ycsb_trace PRIVATE
     # PRINT_LEVEL
 )
 target_link_libraries(ycsb_trace pthread)
+
+# ex_kv_io
+add_executable(ex_kv_io ${CMAKE_CURRENT_SOURCE_DIR}/src/ex_kv_io.cpp ${UTILS_FILES} ${LEVELDB_SOURCES} ${YCSB_SOURCES})
+target_include_directories(ex_kv_io PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
+target_compile_definitions(ex_kv_io PRIVATE 
+    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
+    # LOG_SST
+    # LOG_COMPACTION
+    # PRINT_LEVEL
+)
+target_link_libraries(ex_kv_io pthread)
