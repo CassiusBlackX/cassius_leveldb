@@ -18,6 +18,15 @@
 #include "utils/timer.h"
 #include "utils/utils.h"
 
+#ifdef LOG_SST
+#include "zal_utils.h"
+size_t compaction_info_index = 0;
+zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue(800);
+zal_utils::ThreadSafeQueue<zal_utils::compaction_info> compaction_info_queue(800);
+std::vector<zal_utils::table_info> build_tables;
+std::vector<zal_utils::compaction_info> compaction_infos;
+#endif
+
 void StatusThread(ycsbc::Measurements* measurements, ycsbc::utils::CountDownLatch* latch, int interval) {
     using namespace std::chrono;
     time_point<system_clock> start = system_clock::now();
@@ -72,12 +81,13 @@ int main() {
     ycsbc::utils::Properties props;
     props.SetProperty("doload", "true");
     props.SetProperty("dotransaction", "true");
-    props.SetProperty("threadcount", "10");
+    props.SetProperty("threadcount", "20");
     props.SetProperty("dbname", "leveldb");
     props.SetProperty("status", "true");
     props.SetProperty("sleepafterload", "0");
+
     // workload
-    const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workloada";
+    const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workloadgg";
     std::ifstream input(workload_name);
     try {
         props.Load(input);
@@ -228,5 +238,36 @@ int main() {
     for (int i=0; i<num_threads; i++) {
         delete dbs[i];
     }
+    #ifdef LOG_SST
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    if (!build_table_queue.empty()) {
+        std::vector<zal_utils::table_info> messages;
+        build_table_queue.pop_all(messages);
+        for(const auto& message : messages) {
+            build_tables.push_back(message);
+        }
+    }
+    if (!compaction_info_queue.empty()) {
+        std::vector<zal_utils::compaction_info> messages;
+        compaction_info_queue.pop_all(messages);
+        for(const auto& message : messages) {
+            compaction_infos.push_back(message);
+        }
+        sort(compaction_infos.begin(), compaction_infos.end());
+    }
+
+    std::cout << std::endl;
+    std::cout << "compaction infos: " << std::endl;
+    for (const auto& compaction_info : compaction_infos) {
+        compaction_info.print();
+        for (const auto& table : compaction_info.source) {
+            table.print();
+        }
+        for (const auto& table : compaction_info.target) {
+            table.print();
+        }
+        std::cout << std::endl;
+    }
+    #endif
     return 0;
 }

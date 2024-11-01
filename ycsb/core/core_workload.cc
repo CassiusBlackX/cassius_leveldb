@@ -6,6 +6,7 @@
 //  Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>.
 //  Modifications Copyright 2023 Chengye YU <yuchengye2013 AT outlook.com>.
 //
+#include <iostream>
 
 #include "uniform_generator.h"
 #include "zipfian_generator.h"

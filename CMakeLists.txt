@@ -103,7 +103,7 @@ target_link_libraries(benchmark_zal pthread
 target_compile_definitions(benchmark_zal PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
     ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
-    ZAL_TIMER. # if `ZAL_TIMER` is defined, then we will have `FunctionTimer` counting the time
+    ZAL_TIMER # if `ZAL_TIMER` is defined, then we will have `FunctionTimer` counting the time
 )
 
 # dummy_test
@@ -121,7 +121,7 @@ target_compile_definitions(log_sst PRIVATE
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
     LOG_SST
     LOG_COMPACTION
-    # PRINT_LEVEL
+    PRINT_LEVEL
 )
 
 # ycsb trace
@@ -132,5 +132,8 @@ add_executable(ycsb_trace ${CMAKE_CURRENT_SOURCE_DIR}/src/ycsb_trace.cpp ${YCSB_
 target_include_directories(ycsb_trace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
 target_compile_definitions(ycsb_trace PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
+    LOG_SST
+    LOG_COMPACTION
+    # PRINT_LEVEL
 )
 target_link_libraries(ycsb_trace pthread)

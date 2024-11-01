@@ -18,11 +18,12 @@ workloads：目录下有各种workload的模板，可以基于workload模板进�
 + `options`：-P（指定workload文件）-p key=value（覆盖workload中属性）-threads （进程数）-s(执行过程中是否打印状态信息)
 
 ### 属性参数
-+ `recordcound`: load阶段加载到数据库的纪录条数 (default: 0) ，run阶段操作的数据范围（注：run阶段该值不能大于load阶段的值，否则会出现 Nothing updated for key的错误，该错误会影响update操作的正确性）
++ `recordcount`: load阶段加载到数据库的纪录条数 (default: 0) ，run阶段操作的数据范围（注：run阶段该值不能大于load阶段的值，否则会出现 Nothing updated for key的错误，该错误会影响update操作的正确性）
 + `operationcount`: run阶段执行的操作总数
 + `readallfields`: 查询时是否读取所有字段true或者读取一个字段false(default: true)
 + `fieldcount`: 每条记录的字段个数 (default: 10)
-+ `fieldlength`: 每个字段的数据长度 (default: 100)
++ `fieldlength`: 每个字段的数据长度 (default: 100)  value长度补齐
++ `zeropadding`: 每个key的长度补齐
 + `readproportion`: 读操作比例 (default: 0.95)
 + `updateproportion`: 更新操作比例 (default: 0.05)
 + `insertproportion`: 插入操作比例 (default: 0)
