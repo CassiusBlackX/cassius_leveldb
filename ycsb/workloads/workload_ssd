@@ -1,10 +1,14 @@
 # zal edit workload to test io on linux raid, used together with `properties/raid.properties`
 
-# data size: 16GB = 16K * 1048576
-recordcount=16777216
+# data size: 2GB, initial load 1GB, transaction 1GB, 0.5GB update, 0.5GB insert
+recordcount=1048576
 
 # BUG operationcount should be an unnecessary parameter, but when parsing parameter, it must be passed in, so a dummy value is passed in
-operationcount=1000000
+operationcount=1048576
+readproportion=0
+updateproportion=0.5
+scanproportion=0
+insertproportion=0.5
 
 workload=zal.test.io.ssd
 
@@ -18,7 +22,6 @@ requestdistribution=zipfian
 zeropadding=20
 
 ## in order to have value length==1000, valuelength = (fieldlength + 14) * fieldcount
-# BUG yet to figer out what `14` is
 # value_len: 1000 Bytes
-fieldlength=16346
+fieldlength=1000
 fieldcount=1

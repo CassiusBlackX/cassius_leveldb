@@ -71,13 +71,13 @@ void RateLimitThread(std::string rate_file, std::vector<ycsbc::utils::RateLimite
 // BUG 要想能够控制重叠度的来利用ycsb,只能够先随便load若干范围的数据(key的范围)，然后再进行transaction
 int main() {
     ycsbc::utils::Properties props;
-    props.SetProperty("doload", "false");
+    props.SetProperty("doload", "true");
     // we only test io, so we don't need to do transaction
     props.SetProperty("dotransaction", "true");
     props.SetProperty("threadcount", "4");
     props.SetProperty("dbname", "leveldb");
     props.SetProperty("status", "true");
-    props.SetProperty("sleepafterload", "0");
+    props.SetProperty("sleepafterload", "5");
 
     // workload
     const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workload_ssd";
@@ -170,6 +170,7 @@ int main() {
         std::cout << "Load operations(ops): " << sum << std::endl;
         std::cout << "Load throughput(ops/sec): " << sum / runtime << std::endl;
     }
+
     measurements->Reset();
     std::this_thread::sleep_for(std::chrono::seconds(std::stoi(props.GetProperty("sleepafterload", "0"))));
 
