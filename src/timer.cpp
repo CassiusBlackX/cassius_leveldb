@@ -13,14 +13,16 @@ FunctionTimer::FunctionTimer(const FunctionTimer* parent, const std::string& pro
 
 FunctionTimer::~FunctionTimer() {
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    total_time[function_name_] = total_time.contains(function_name_) ? duration : std::max((long long)duration, (long long)total_time[function_name_]);  // BUG 为什么这里必须要我强制类型转换？
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count();
+    // total_time[function_name_] = total_time.contains(function_name_) ? duration : std::max(static_cast<long long>(duration), static_cast<long long>(total_time[function_name_]));
+    // we need the total time ,not the max time
+    total_time[function_name_] = total_time.contains(function_name_) ? total_time[function_name_] + duration : duration;
 }
 
 void FunctionTimer::printTotalTimes() {
     std::cout << total_time.size() << std::endl;
     for (const auto& entry : total_time) {
-        std::cout << "Total time spent in " << entry.first << "(): " << entry.second << " milliseconds." << std::endl;
+        std::cout << "Total time spent in " << entry.first << "(): " << entry.second << " seconds." << std::endl;
     }
 }
 

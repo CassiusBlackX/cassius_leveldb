@@ -325,9 +325,9 @@ DB::Status LeveldbDB::InsertSingleEntry(const std::string &table, const std::str
         throw utils::Exception(std::string("LevelDB Put: ") + s.ToString());
     }
     return kOK;
-    }
+}
 
-    DB::Status LeveldbDB::DeleteSingleEntry(const std::string &table, const std::string &key) {
+DB::Status LeveldbDB::DeleteSingleEntry(const std::string &table, const std::string &key) {
     leveldb::WriteOptions wopt;
     leveldb::Status s = db_->Delete(wopt, key);
     if (!s.ok()) {

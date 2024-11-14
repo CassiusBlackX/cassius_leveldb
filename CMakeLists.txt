@@ -148,3 +148,13 @@ target_compile_definitions(ex_kv_io PRIVATE
     # PRINT_LEVEL
 )
 target_link_libraries(ex_kv_io pthread)
+
+# benchmark_ycsb
+add_executable(benchmark_ycsb ${CMAKE_CURRENT_SOURCE_DIR}/src/benchmark_ycsb.cpp ${YCSB_SOURCES} ${LEVELDB_SOURCES} ${UTILS_FILES})
+target_include_directories(benchmark_ycsb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
+target_compile_definitions(benchmark_ycsb PRIVATE 
+    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
+    BENCHMARK_YCSB
+    BAN_COMPACTION
+)
+target_link_libraries(benchmark_ycsb pthread)

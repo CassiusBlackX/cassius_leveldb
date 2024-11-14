@@ -31,7 +31,7 @@ int main(){
     leveldb::WriteOptions write_options;
     leveldb::ReadOptions read_options;
     options.create_if_missing = true;
-    options.write_buffer_size = 2 * 1024 * 1024; // 2MB
+    options.write_buffer_size = 4 * 1024 * 1024; // 2MB
 
     leveldb::Status status = leveldb::DB::Open(options, dbName, &db);
 

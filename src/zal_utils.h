@@ -98,7 +98,7 @@ public:
 private:
     static std::map<std::string, long long> total_time;
     std::string function_name_;
-    static std::map<std::string, size_t> called_times;  // how many times has the same function been called.
+    // static std::map<std::string, size_t> called_times;  // how many times has the same function been called.
     std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
 };
 

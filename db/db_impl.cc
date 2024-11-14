@@ -41,6 +41,10 @@ extern zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue;
 extern size_t compaction_info_index;
 #endif
 
+#ifdef BENCHMARK_YCSB
+#include "zal_utils.h"
+#endif
+
 namespace leveldb {
 
 const int kNumNonTableCacheFiles = 10;
@@ -915,6 +919,10 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
 }
 
 Status DBImpl::DoCompactionWork(CompactionState* compact) {
+  #ifdef BENCHMARK_YCSB
+  zal_utils::FunctionTimer* do_compaction_timer = new zal_utils::FunctionTimer("DoCompactionWork");
+  #endif
+  #ifndef BAN_COMPACTION
   const uint64_t start_micros = env_->NowMicros();
   int64_t imm_micros = 0;  // Micros spent doing imm_ compactions
 
@@ -1072,7 +1080,14 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   }
   VersionSet::LevelSummaryStorage tmp;
   Log(options_.info_log, "compacted to: %s", versions_->LevelSummary(&tmp));
+  #ifdef BENCHMARK_YCSB
+  delete do_compaction_timer;
+  #endif
   return status;
+  #else 
+  delete do_compaction_timer;
+  return Status::OK();
+  #endif // BAN_COMPACTION
 }
 
 namespace {

@@ -1,10 +1,9 @@
 #include <iostream>
-#include <string>
-#include <thread>
-#include <future>
 #include <chrono>
-#include <iomanip>
+#include <thread>
 #include <vector>
+#include <iomanip>
+#include <future>
 
 #include <leveldb/db.h>
 
@@ -17,6 +16,8 @@
 #include "utils/rate_limit.h"
 #include "utils/timer.h"
 #include "utils/utils.h"
+
+#include "zal_utils.h"
 
 void StatusThread(ycsbc::Measurements* measurements, ycsbc::utils::CountDownLatch* latch, int interval) {
     using namespace std::chrono;
@@ -68,19 +69,18 @@ void RateLimitThread(std::string rate_file, std::vector<ycsbc::utils::RateLimite
     }
 }
 
-// BUG 要想能够控制重叠度的来利用ycsb,只能够先随便load若干范围的数据(key的范围)，然后再进行transaction
 int main() {
     ycsbc::utils::Properties props;
-    props.SetProperty("doload", "false");
+    props.SetProperty("doload", "true");
     // we only test io, so we don't need to do transaction
-    props.SetProperty("dotransaction", "true");
+    props.SetProperty("dotransaction", "false");
     props.SetProperty("threadcount", "4");
     props.SetProperty("dbname", "leveldb");
     props.SetProperty("status", "true");
     props.SetProperty("sleepafterload", "0");
 
     // workload
-    const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workload_ssd";
+    const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workload_benchmark";
     std::ifstream input(workload_name);
     try {
         props.Load(input);
@@ -132,6 +132,7 @@ int main() {
     const bool show_status = (props.GetProperty("status", "false") == "true");
     const int status_interval = std::stoi(props.GetProperty("status.interval", "10"));
 
+    zal_utils::FunctionTimer* main_timer = new zal_utils::FunctionTimer("main");
     // load phase
     if (do_load) {
         const int total_ops = std::stoi(props[ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY]);
@@ -173,63 +174,13 @@ int main() {
     measurements->Reset();
     std::this_thread::sleep_for(std::chrono::seconds(std::stoi(props.GetProperty("sleepafterload", "0"))));
 
-    // transaction phase
-    if (do_transaction) {
-        // initial ops per second, unlimited if <= 0
-        const int64_t ops_limit = std::stoi(props.GetProperty("limit.ops", "0"));
-        // rate file path for dynamic rate limiting, format "time_stamp_sec new_ops_per_second" per line
-        std::string rate_file = props.GetProperty("limit.file", "");
-
-        const int total_ops = std::stoi(props[ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY]);
-
-        ycsbc::utils::CountDownLatch latch(num_threads);
-        ycsbc::utils::Timer<double> timer;
-        timer.Start();
-
-        std::future<void> status_future;
-        if (show_status) {
-            status_future = std::async(std::launch::async, StatusThread, measurements, &latch, status_interval);
-        }
-        std::vector<std::future<int>> client_threads;
-        std::vector<ycsbc::utils::RateLimiter*> rate_limiters;
-        for (int i = 0; i < num_threads; i++) {
-            int thread_ops = total_ops / num_threads;
-            if (i < total_ops % num_threads) {
-                thread_ops++;
-            }
-            ycsbc::utils::RateLimiter* rlim = nullptr;
-            if (ops_limit > 0 || rate_file != "") {
-                int64_t per_thread_ops = ops_limit / num_threads;
-                rlim = new ycsbc::utils::RateLimiter(per_thread_ops, per_thread_ops);
-            }
-            rate_limiters.push_back(rlim);
-            client_threads.emplace_back(std::async(std::launch::async, ycsbc::ClientThread, dbs[i], &wl, thread_ops, false, !do_load, true, &latch, rlim));
-        }
-
-        std::future<void> rlim_future;
-        if (rate_file != "") {
-            rlim_future = std::async(std::launch::async, RateLimitThread, rate_file, rate_limiters, &latch);
-        }
-
-        assert((int)client_threads.size() == num_threads);
-
-        int sum = 0;
-        for (auto &n : client_threads) {
-            assert(n.valid());
-            sum += n.get();
-        }
-        double runtime = timer.End();
-
-        if (show_status) {
-            status_future.wait();
-        }
-
-        std::cout << "Run runtime(sec): " << runtime << std::endl;
-        std::cout << "Run operations(ops): " << sum << std::endl;
-        std::cout << "Run throughput(ops/sec): " << sum / runtime << std::endl;    
-    }
+    // end of timer main
+    delete main_timer;
 
     for (int i=0; i<num_threads; i++) {
         delete dbs[i];
     }
+
+    zal_utils::FunctionTimer::printTotalTimes();
+    return 0;
 }
