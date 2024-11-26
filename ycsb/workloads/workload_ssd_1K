@@ -1,0 +1,24 @@
+# zal edit workload to test io on linux raid, used together with `properties/raid.properties`
+
+# data size: 4GB
+recordcount=4194304
+
+# BUG operationcount should be an unnecessary parameter, but when parsing parameter, it must be passed in, so a dummy value is passed in
+operationcount=1000000
+
+workload=zal.test.io.ssd
+
+readallfields=true
+
+requestdistribution=zipfian
+
+# zal add to control key&value length
+## zeropadding should - 4 because there is a prefix "user" in every key
+# key_len: 24 Bytes
+zeropadding=20
+
+## in order to have value length==1000, valuelength = (fieldlength + 14) * fieldcount
+# BUG yet to figer out what `14` is
+# value_len: 1000 Bytes
+fieldlength=986
+fieldcount=1
