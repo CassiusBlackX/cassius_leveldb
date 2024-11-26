@@ -69,7 +69,10 @@ void RateLimitThread(std::string rate_file, std::vector<ycsbc::utils::RateLimite
 }
 
 // BUG 要想能够控制重叠度的来利用ycsb,只能够先随便load若干范围的数据(key的范围)，然后再进行transaction
-int main() {
+int main(int argc, char * argv[]) {
+    /*
+    * cmd line args: [workload file name] [db properties file name]
+    */
     ycsbc::utils::Properties props;
     props.SetProperty("doload", "true");
     // we only test io, so we don't need to do transaction
@@ -79,8 +82,18 @@ int main() {
     props.SetProperty("status", "true");
     props.SetProperty("sleepafterload", "5");
 
+    std::string workload_name, db_property;
+
+    if (argc != 3) {
+        std::cerr << "no command line args!! using default" << std::endl;
+        workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workload_ssd.ini";
+        db_property = std::string(CMAKELISTS_PATH) + "/ycsb/properties/ssd.properties";
+    } else {
+        workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/" + argv[1];
+        db_property = std::string(CMAKELISTS_PATH) + "/ycsb/properties/" + argv[2];
+    }
+
     // workload
-    const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workload_ssd";
     std::ifstream input(workload_name);
     try {
         props.Load(input);
@@ -89,8 +102,8 @@ int main() {
         exit(0);
     }
     input.close();
+
     // db property
-    const std::string& db_property = std::string(CMAKELISTS_PATH) + "/ycsb/properties/ssd.properties"; 
     std::ifstream db_input(db_property);
     try {
         props.Load(db_input);
