@@ -65,6 +65,12 @@ list(FILTER YCSB_SOURCES EXCLUDE REGEX ".*ycsbc.cc$") # exclude ycsbc.cc, write 
 list(APPEND YCSB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/ycsb/leveldbDB.cpp)
 message(STATUS "YCSB_SOURCES: ${YCSB_SOURCES}")
 
+# dummydb for ycsb
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/ycsb/core DUMMY_YCSB)
+list(FILTER DUMMY_YCSB EXCLUDE REGEX ".*ycsbc.cc$") # exclude ycsbc.cc, write our own main function
+list(APPEND DUMMY_YCSB ${CMAKE_CURRENT_SOURCE_DIR}/ycsb/dummyDB.cpp)
+message(STATUS "DUMMY_YCSB: ${DUMMY_YCSB}")
+
 # check OS
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
     message(STATUS "Configuring for Windows")
@@ -112,7 +118,7 @@ target_compile_definitions(benchmark_zal PRIVATE
 # dummy_test
 add_executable(dummy_test ${CMAKE_CURRENT_SOURCE_DIR}/src/dummy_test.cpp 
     ${UTILS_FILES}
-    # ${LEVELDB_SOURCES}
+    ${LEVELDB_SOURCES}
 )
 target_link_libraries(dummy_test pthread)
 
@@ -166,3 +172,11 @@ target_compile_definitions(basic_ycsb_demo PRIVATE
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
 )
 target_link_libraries(basic_ycsb_demo pthread)
+
+# ycsb_dataset
+add_executable(ycsb_dataset ${CMAKE_CURRENT_SOURCE_DIR}/src/ycsb_dataset.cpp ${DUMMY_YCSB} ${LEVELDB_SOURCES} ${UTILS_FILES})
+target_include_directories(ycsb_dataset PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
+target_compile_definitions(ycsb_dataset PRIVATE 
+    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of cmakelist
+)
+target_link_libraries(ycsb_dataset pthread)

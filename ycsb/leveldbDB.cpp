@@ -113,7 +113,7 @@ void LeveldbDB::Init() {
     }
     }
 
-    void LeveldbDB::Cleanup() {
+void LeveldbDB::Cleanup() {
     const std::lock_guard<std::mutex> lock(mu_);
     if (--ref_cnt_) {
         return;
@@ -265,6 +265,7 @@ DB::Status LeveldbDB::ReadSingleEntry(const std::string &table, const std::strin
 DB::Status LeveldbDB::ScanSingleEntry(const std::string &table, const std::string &key, int len,
                                     const std::vector<std::string> *fields,
                                     std::vector<std::vector<Field>> &result) {
+    // BUG leveldb is a kv db, so it should not have multiple kv pairs with the same key, this operation should not be implemented!!
     leveldb::Iterator *db_iter = db_->NewIterator(leveldb::ReadOptions());
     db_iter->Seek(key);
     for (int i = 0; db_iter->Valid() && i < len; i++) {
@@ -467,9 +468,9 @@ DB::Status LeveldbDB::DeleteCompKey(const std::string &table, const std::string 
         throw utils::Exception(std::string("LevelDB Write: ") + s.ToString());
     }
     return kOK;
-    }
+}
 
-    DB *NewLeveldbDB() {
+DB *NewLeveldbDB() {
     return new LeveldbDB;
 }
 

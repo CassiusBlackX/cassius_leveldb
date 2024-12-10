@@ -20,8 +20,9 @@
 #include "util/logging.h"
 
 #ifdef TRACE_KV
+#include "zal_utils.h"
 extern zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> tsQueue_key_table;
-extern zal_utils::ThreadSafeQueue<zal_utils::build_table_queue> build_table_queue;
+extern zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue;
 #endif
 
 namespace leveldb {

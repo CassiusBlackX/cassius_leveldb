@@ -19,7 +19,7 @@ static const size_t ITERATIONS = 1e3;
 
 zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> tsQueue_key_table(VALID_KEYS_COUNT+1); 
 
-zal_utils::ThreadSafeQueue<zal_utils::build_table_queue> build_table_queue(800);
+zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue(800);
 
 std::deque<zal_utils::CSnapshot> snapshots;
 std::unordered_map<std::string, std::queue<int>> key_table;
@@ -48,7 +48,7 @@ int main() {
     std::unordered_map<std::string, std::string> store;
     
     // std::vector<zal_utils::build_table_queue> table_ranges; 使用vector在打印的时候数据存在重复
-    std::set<zal_utils::build_table_queue> table_ranges;  
+    std::set<zal_utils::table_info> table_ranges;  
 
     size_t global_sequnce = 0;  // in leveldb, for every key, adding to the only sequence number
 
