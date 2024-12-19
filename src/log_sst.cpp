@@ -1,6 +1,7 @@
 #include <vector>
 #include <random>
 #include <chrono>
+#include <unordered_set>
 
 #include <leveldb/db.h>
 
@@ -15,11 +16,23 @@ static constexpr size_t ITERATIONS = 1e6;
 所有调用builder->Finish()的地方都是在生成sst，所以必须要在每个builder->Finish()的地方记录sst的信息。
 但是在builder->Finish()中，无法记录sst的level，所以只能在其它地方记录level。
 */
-size_t compaction_info_index = 0;
 zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue(800);
 zal_utils::ThreadSafeQueue<zal_utils::compaction_info> compaction_info_queue(800);
 std::vector<zal_utils::table_info> build_tables;
 std::vector<zal_utils::compaction_info> compaction_infos;
+
+namespace std {
+template <>
+struct hash<zal_utils::table_info> {
+    std::size_t operator()(const zal_utils::table_info &t) const {
+            std::size_t h1 = std::hash<unsigned>()(t.index);
+            std::size_t h2 = std::hash<std::string>()(t.smallest_key);
+            std::size_t h3 = std::hash<std::string>()(t.largest_key);
+            // std::size_t h4 = std::hash<size_t>()(t.table_size);
+            return h1 ^ (h2 << 1) ^ (h3 << 2) ;
+        }
+    };
+}
 
 int main() {
     std::mt19937 rng(44);
@@ -60,8 +73,9 @@ int main() {
     }
 
     // sleep for a while to wait for compaction
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::seconds(3));
 
+/*
     if (!build_table_queue.empty()) {
         std::vector<zal_utils::table_info> messages;
         build_table_queue.pop_all(messages);
@@ -93,6 +107,57 @@ int main() {
         }
         std::cout << std::endl;
     }
+*/
+    std::unordered_set<zal_utils::table_info> built_table_set;
+    std::vector<zal_utils::table_info> built_tables;
+    std::vector<zal_utils::compaction_info> compacted_infos;
+
+    if (!build_table_queue.empty()) {
+        build_table_queue.pop_all(built_table_set);
+    }
+    
+    if (!compaction_info_queue.empty()) {
+        compaction_info_queue.pop_all(compacted_infos);
+    }
+    sort(compacted_infos.begin(), compacted_infos.end());
+
+    std::cout << "compaction infos: " << std::endl;
+    for (const auto & compaction_info : compacted_infos) {
+        compaction_info.print();
+        for (const auto& table : compaction_info.source) {
+            auto it = built_table_set.find(table);
+            if (it != built_table_set.end()) {
+                zal_utils::table_info updated_table = *it;
+                updated_table.level = table.level;
+                built_table_set.erase(it);
+                built_table_set.insert(updated_table);
+            }
+            else {
+                built_table_set.insert(table);
+            }
+        }
+        for (const auto& table : compaction_info.target) {
+            auto it = built_table_set.find(table);
+            if (it != built_table_set.end()) {
+                zal_utils::table_info updated_table = *it;
+                updated_table.level = table.level;
+                built_table_set.erase(it);
+                built_table_set.insert(updated_table);
+            }
+            else {
+                built_table_set.insert(table);
+            }
+        }
+    }
+    
+    for (const auto& table : built_table_set) {
+        built_tables.push_back(table);
+    }
+    sort(built_tables.begin(), built_tables.end());
+    for (const auto& table : built_tables) {
+        table.print();
+    }
+
     return 0;
 
 }

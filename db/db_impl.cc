@@ -38,7 +38,8 @@
 #ifdef LOG_SST
 extern zal_utils::ThreadSafeQueue<zal_utils::compaction_info> compaction_info_queue;
 extern zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue;
-extern size_t compaction_info_index;
+static size_t compaction_info_index = 0;
+std::chrono::time_point<std::chrono::high_resolution_clock> compaction_start_time;
 #endif
 
 #ifdef BENCHMARK_YCSB
@@ -913,6 +914,12 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
     #endif
   }
   #ifdef LOG_SST
+  if (compaction_start_time == std::chrono::time_point<std::chrono::high_resolution_clock>()) {
+    info.elapsed_time = std::chrono::duration<double, std::milli>::zero();
+  } else {
+    info.elapsed_time = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(std::chrono::high_resolution_clock::now() - compaction_start_time);
+  }
+  compaction_start_time = std::chrono::high_resolution_clock::now();
   compaction_info_queue.push(info);
   #endif
   return versions_->LogAndApply(compact->compaction->edit(), &mutex_);

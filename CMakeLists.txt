@@ -93,15 +93,15 @@ set(UTILS_FILES
 
 # generate executable files
 # trace_kv
-add_executable(trace_kv ${CMAKE_CURRENT_SOURCE_DIR}/src/trace_kv.cpp ${UTILS_FILES} ${LEVELDB_SOURCES})
-target_link_libraries(trace_kv pthread)
-target_compile_definitions(trace_kv PRIVATE 
+add_executable(ycsb_compaction_trace ${CMAKE_CURRENT_SOURCE_DIR}/src/ycsb_compaction_trace.cpp ${UTILS_FILES} ${LEVELDB_SOURCES} ${YCSB_SOURCES})
+target_include_directories(ycsb_compaction_trace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
+target_link_libraries(ycsb_compaction_trace pthread)
+target_compile_definitions(ycsb_compaction_trace PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
-    ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
+    # ZAL_DEBUG  # if `ZAL_DEBUG` is defined, then lines zal changed will be compiled, or else it will be original leveldb
     # PRINT_LEVEL  # if `PRINT_LEVEL` is defined, then a lot of log infos will be compiled
-    TRACE_KV  # if `TRACE_KV` is defined, then we will trace the kvs
-    LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
-    PRINT_LEVEL
+    # LOG_COMPACTION  # if `LOG_COMPACTION` is defined, then we will log when compaction happens
+    LOG_SST
 )
 
 # benchmark_zal
@@ -133,16 +133,6 @@ target_compile_definitions(log_sst PRIVATE
     PRINT_LEVEL
 )
 
-# ycsb trace
-add_executable(ycsb_trace ${CMAKE_CURRENT_SOURCE_DIR}/src/ycsb_trace.cpp ${YCSB_SOURCES} ${LEVELDB_SOURCES} ${UTILS_FILES})
-target_include_directories(ycsb_trace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
-target_compile_definitions(ycsb_trace PRIVATE 
-    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of CMakeLists.txt to the compiler
-    LOG_SST
-    LOG_COMPACTION
-    # PRINT_LEVEL
-)
-target_link_libraries(ycsb_trace pthread)
 
 # ex_kv_io
 add_executable(ex_kv_io ${CMAKE_CURRENT_SOURCE_DIR}/src/ex_kv_io.cpp ${UTILS_FILES} ${LEVELDB_SOURCES} ${YCSB_SOURCES})
@@ -180,3 +170,5 @@ target_compile_definitions(ycsb_dataset PRIVATE
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of cmakelist
 )
 target_link_libraries(ycsb_dataset pthread)
+
+# demo_

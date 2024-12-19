@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <string>
 #include <map>
+#include <unordered_set>
 #include <chrono>
 #include <leveldb/db.h>
 #include <random>
@@ -44,6 +45,16 @@ public:
         cond_empty_.wait(lock, [this] { return !queue_.empty(); });
         while (!queue_.empty()) {
             values.push_back(queue_.front());
+            queue_.pop();
+        }
+        cond_full_.notify_one();
+    }
+
+    void pop_all(std::unordered_set<T>& values) {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        cond_empty_.wait(lock, [this] { return !queue_.empty(); });
+        while (!queue_.empty()) {
+            values.insert(queue_.front());
             queue_.pop();
         }
         cond_full_.notify_one();
@@ -102,17 +113,6 @@ private:
     std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
 };
 
-// path_string
-/// @brief replace the number in the `pathStr` with the given `disknumber`
-std::string replaceDiskNumber(const std::string& pathStr, unsigned diskNumber);
-
-/// @brief replace the number in the `pathStr` with the given `diskNumber` but only at the `rindex`th part
-/// @param pathStr 
-/// @param diskNumber 
-/// @param rindex usually, it is negative, which means the index from the end. e.g. -1 means the last part
-/// @return replaced pathString
-std::string replaceDiskNumber(const std::string& pathStr, unsigned diskNumber, int rindex);
-
 struct table_info {
     unsigned index;
     unsigned level;
@@ -123,8 +123,17 @@ struct table_info {
     table_info() = default;
     table_info(unsigned index, unsigned level, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(level), smallest_key(smallest), largest_key(largest), table_size(size) {}
     table_info(unsigned index, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(static_cast<unsigned>(-1)), smallest_key(smallest), largest_key(largest), table_size(size) {}
+    
     bool operator<(const table_info& other) const {
         return index < other.index;
+    }
+
+    bool operator==(const table_info& other) const {
+        return index == other.index
+            && smallest_key == other.smallest_key
+            && largest_key == other.largest_key
+            // && table_size == other.table_size
+            ;
     }
 
     void print() const {
@@ -142,12 +151,14 @@ struct compaction_info {
     std::vector<table_info> source;  // tables to be compacted
     std::vector<table_info> target;
     size_t index;
+    std::chrono::duration<double, std::milli> elapsed_time;
 
     bool operator<(const compaction_info& other) const {
         return index < other.index;
     }
 
     void print() const {
+        std::cout << "the " << index <<" compaction: " << "elapsed_time: " << elapsed_time.count() << "ms\n\t";
         for(int i=0;i<source.size();i++) {
             std::cout << source[i].index << "@" << source[i].level;
             if (i != source.size() - 1) {

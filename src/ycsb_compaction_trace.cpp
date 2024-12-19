@@ -5,6 +5,8 @@
 #include <chrono>
 #include <iomanip>
 #include <vector>
+#include <algorithm>
+#include <unordered_set>
 
 #include <leveldb/db.h>
 
@@ -18,14 +20,29 @@
 #include "utils/timer.h"
 #include "utils/utils.h"
 
-#ifdef LOG_SST
 #include "zal_utils.h"
-size_t compaction_info_index = 0;
-zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue(800);
-zal_utils::ThreadSafeQueue<zal_utils::compaction_info> compaction_info_queue(800);
-std::vector<zal_utils::table_info> build_tables;
-std::vector<zal_utils::compaction_info> compaction_infos;
+
+#ifndef CMAKELISTS_PATH
+#define CMAKELISTS_PATH "."
 #endif
+
+namespace std {
+template <>
+struct hash<zal_utils::table_info> {
+    std::size_t operator()(const zal_utils::table_info &t) const {
+            std::size_t h1 = std::hash<unsigned>()(t.index);
+            std::size_t h2 = std::hash<std::string>()(t.smallest_key);
+            std::size_t h3 = std::hash<std::string>()(t.largest_key);
+            // std::size_t h4 = std::hash<size_t>()(t.table_size);
+            return h1 ^ (h2 << 1) ^ (h3 << 2) ;
+        }
+    };
+}
+
+std::chrono::time_point<std::chrono::high_resolution_clock> start_time = std::chrono::high_resolution_clock::now();
+// we are not sure how many ssts are going to be generated, therefore we put all of them in the queue, until ycsb finishes
+zal_utils::ThreadSafeQueue<zal_utils::table_info> build_table_queue(2e5);
+zal_utils::ThreadSafeQueue<zal_utils::compaction_info> compaction_info_queue(2e5);
 
 void StatusThread(ycsbc::Measurements* measurements, ycsbc::utils::CountDownLatch* latch, int interval) {
     using namespace std::chrono;
@@ -83,11 +100,11 @@ int main() {
     props.SetProperty("dotransaction", "true");
     props.SetProperty("threadcount", "20");
     props.SetProperty("dbname", "leveldb");
-    props.SetProperty("status", "true");
+    props.SetProperty("status", "false");
     props.SetProperty("sleepafterload", "0");
 
     // workload
-    const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workloadgg";
+    const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workload_benchmark.ini";
     std::ifstream input(workload_name);
     try {
         props.Load(input);
@@ -97,7 +114,7 @@ int main() {
     }
     input.close();
     // db property
-    const std::string& db_property = std::string(CMAKELISTS_PATH) + "/ycsb/leveldb.properties"; 
+    const std::string& db_property = std::string(CMAKELISTS_PATH) + "/ycsb/properties/ssd.properties"; 
     std::ifstream db_input(db_property);
     try {
         props.Load(db_input);
@@ -173,9 +190,9 @@ int main() {
             status_future.wait();
         }
 
-        std::cout << "Load runtime(sec): " << runtime << std::endl;
-        std::cout << "Load operations(ops): " << sum << std::endl;
-        std::cout << "Load throughput(ops/sec): " << sum / runtime << std::endl;
+        // std::cout << "Load runtime(sec): " << runtime << std::endl;
+        // std::cout << "Load operations(ops): " << sum << std::endl;
+        // std::cout << "Load throughput(ops/sec): " << sum / runtime << std::endl;
     }
     measurements->Reset();
     std::this_thread::sleep_for(std::chrono::seconds(std::stoi(props.GetProperty("sleepafterload", "0"))));
@@ -231,43 +248,69 @@ int main() {
             status_future.wait();
         }
 
-        std::cout << "Run runtime(sec): " << runtime << std::endl;
-        std::cout << "Run operations(ops): " << sum << std::endl;
-        std::cout << "Run throughput(ops/sec): " << sum / runtime << std::endl;    
+        // std::cout << "Run runtime(sec): " << runtime << std::endl;
+        // std::cout << "Run operations(ops): " << sum << std::endl;
+        // std::cout << "Run throughput(ops/sec): " << sum / runtime << std::endl;    
     }
     for (int i=0; i<num_threads; i++) {
         delete dbs[i];
     }
-    #ifdef LOG_SST
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    if (!build_table_queue.empty()) {
-        std::vector<zal_utils::table_info> messages;
-        build_table_queue.pop_all(messages);
-        for(const auto& message : messages) {
-            build_tables.push_back(message);
-        }
-    }
-    if (!compaction_info_queue.empty()) {
-        std::vector<zal_utils::compaction_info> messages;
-        compaction_info_queue.pop_all(messages);
-        for(const auto& message : messages) {
-            compaction_infos.push_back(message);
-        }
-        sort(compaction_infos.begin(), compaction_infos.end());
-    }
 
-    std::cout << std::endl;
+    // sleep for a while to wait for compaction finishes
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    std::unordered_set<zal_utils::table_info> built_table_set;
+    std::vector<zal_utils::table_info> built_tables;
+    std::vector<zal_utils::compaction_info> compacted_infos;
+
+    if (!build_table_queue.empty()) {
+        build_table_queue.pop_all(built_table_set);
+    }
+    
+    if (!compaction_info_queue.empty()) {
+        compaction_info_queue.pop_all(compacted_infos);
+    }
+    sort(compacted_infos.begin(), compacted_infos.end());
+
+    std::cout << "total amount of compaction infos: " << compacted_infos.size() << std::endl;
     std::cout << "compaction infos: " << std::endl;
-    for (const auto& compaction_info : compaction_infos) {
+    for (const auto & compaction_info : compacted_infos) {
         compaction_info.print();
         for (const auto& table : compaction_info.source) {
-            table.print();
+            auto it = built_table_set.find(table);
+            if (it != built_table_set.end()) {
+                zal_utils::table_info updated_table = *it;
+                updated_table.level = table.level;
+                built_table_set.erase(it);
+                built_table_set.insert(updated_table);
+            }
+            else {
+                // the new compacted generated table is not in built_table
+                built_table_set.insert(table);
+            }
         }
         for (const auto& table : compaction_info.target) {
-            table.print();
+            auto it = built_table_set.find(table);
+            if (it != built_table_set.end()) {
+                zal_utils::table_info updated_table = *it;
+                updated_table.level = table.level;
+                built_table_set.erase(it);
+                built_table_set.insert(updated_table);
+            }
+            else {
+                // the new compacted generated table is not in built_table
+                built_table_set.insert(table);
+            }
         }
-        std::cout << std::endl;
     }
-    #endif
+
+    for (const auto& table : built_table_set) {
+        built_tables.push_back(table);
+    }
+    sort(built_tables.begin(), built_tables.end());
+    for (const auto& table : built_tables) {
+        table.print();
+    }
+
     return 0;
 }

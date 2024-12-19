@@ -74,11 +74,11 @@ int main() {
     props.SetProperty("dotransaction", "true");
     props.SetProperty("threadcount", "20");
     props.SetProperty("dbname", "leveldb");
-    props.SetProperty("status", "true");
+    props.SetProperty("status", "false");
     props.SetProperty("sleepafterload", "0");
 
     // workload
-    const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workload_ssd";
+    const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workload_benchmark.ini";
     std::ifstream input(workload_name);
     try {
         props.Load(input);
@@ -128,6 +128,7 @@ int main() {
 
     // print status periodically
     const bool show_status = (props.GetProperty("status", "false") == "true");
+
     const int status_interval = std::stoi(props.GetProperty("status.interval", "10"));
 
     // load phase
