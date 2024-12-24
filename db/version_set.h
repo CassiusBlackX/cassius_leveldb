@@ -24,10 +24,6 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
-#ifdef LOG_SST
-#include "zal_utils.h"
-#endif
-
 namespace leveldb {
 
 namespace log {
@@ -76,7 +72,7 @@ class Version {
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
-  Status Get(const ReadOptions&, const LookupKey& key, std::string* val,
+  Status Get(ReadOptions&, const LookupKey& key, std::string* val,
              GetStats* stats);
 
   // Adds "stats" into the current state.  Returns true if a new
@@ -117,6 +113,16 @@ class Version {
 
   // Return a human readable string that describes this version's contents.
   std::string DebugString() const;
+
+  // added by lzy to realize low-level ec .
+  int LowLevelEc(int forced);
+  int EcMark(std::set<uint64_t> whichtoec);
+  int HighLevelEc(FileMetaData *f, Ecpath ecpath);
+  int Findstripe(uint64_t leadernumber, FileMetaData* returnf[], int* findnum);
+
+  // added by lzy to protect the table files from deletion because they have not been encoded .
+  std::set<uint64_t> waitforec_;
+  int ecnode_waiting[4] = {0,0,0,0};
 
  private:
   friend class Compaction;
@@ -360,23 +366,6 @@ class Compaction {
   // Release the input version for the compaction, once the compaction
   // is successful.
   void ReleaseInputs();
-
-  #ifdef LOG_SST
-  std::vector<zal_utils::table_info> GetTableInfo() {
-    std::vector<zal_utils::table_info> table_info_;
-    for (int i=0;i<2;i++) {
-      for (int j=0;j<inputs_[i].size();j++) {
-        FileMetaData* file = inputs_[i][j];
-        std::string smallest = file->smallest.user_key().ToString();
-        std::string largest = file->largest.user_key().ToString();
-        size_t size = file->file_size;
-        unsigned level = level_ + i;
-        table_info_.emplace_back(static_cast<unsigned>(file->number), level, smallest, largest, size);
-      }
-    }
-    return table_info_;
-  }
-  #endif
 
  private:
   friend class Version;

@@ -145,19 +145,35 @@ Status DumpDescriptor(Env* env, const std::string& fname, WritableFile* dst) {
 }
 
 Status DumpTable(Env* env, const std::string& fname, WritableFile* dst) {
+  // added by lzy .
+  int ec_m = config::ec_m;
+  int ec_k = config::ec_k;
+  int ec_p = config::ec_p;
   uint64_t file_size;
-  RandomAccessFile* file = nullptr;
+  RandomAccessFile* file[ec_m+1];
   Table* table = nullptr;
   Status s = env->GetFileSize(fname, &file_size);
   if (s.ok()) {
-    s = env->NewRandomAccessFile(fname, &file);
+    s = env->NewRandomAccessFile(fname, &file[0]);
+    std::string fname_new;
+    int i=0;
+    for(;i<fname.length();i++)
+      if(fname.data()[i]=='.')
+        break;
+    std::string dbname = std::string(fname,i);
+    uint64_t number = (uint64_t )stoll(std::string(fname,i+1,6),0,10);
+    for(int i=0;i<ec_m;i++)
+    {
+      fname_new = ParityBlockFileName(dbname, number, i - ec_k);
+      s = env->NewRandomAccessFile(fname_new, &file[i]);  
+    }
   }
   if (s.ok()) {
     // We use the default comparator, which may or may not match the
     // comparator used in this database. However this should not cause
     // problems since we only use Table operations that do not require
     // any comparisons.  In particular, we do not call Seek or Prev.
-    s = Table::Open(Options(), file, file_size, &table);
+    s = Table::Open(Options(), file, file_size, &table,0);
   }
   if (!s.ok()) {
     delete table;

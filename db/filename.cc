@@ -40,6 +40,16 @@ std::string SSTTableFileName(const std::string& dbname, uint64_t number) {
   return MakeFileName(dbname, number, "sst");
 }
 
+// added by lzy to construct the name of a parity block .
+std::string ParityBlockFileName(const std::string& dbname, uint64_t number, int parity_number)
+{
+  assert(number > 0);
+  char *des = (char *)malloc(4);
+  des[0] = parity_number + 48;
+  des[1] = '\0';
+  return MakeFileName(dbname, number, strcat(des,"pb"));
+}
+
 std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   char buf[100];

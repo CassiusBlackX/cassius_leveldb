@@ -6,6 +6,7 @@
 
 #include <cassert>
 
+#include "db/dbformat.h"
 #include "leveldb/comparator.h"
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
@@ -15,15 +16,19 @@
 #include "table/format.h"
 #include "util/coding.h"
 #include "util/crc32c.h"
+#include "string.h"
+#include "iostream"
+#include "isa-l.h"
 
-#ifdef ZAL_TIMER
-#include "zal_utils.h"
-#include "dbformat.h"
-#endif
+#include "include/leveldb/timer.h"
+#include <fstream>
+
+using namespace std;
+
 namespace leveldb {
 
 struct TableBuilder::Rep {
-  Rep(const Options& opt, WritableFile* f)
+  Rep(const Options& opt, WritableFile** f)
       : options(opt),
         index_block_options(opt),
         file(f),
@@ -41,7 +46,7 @@ struct TableBuilder::Rep {
 
   Options options;
   Options index_block_options;
-  WritableFile* file;
+  WritableFile** file;
   uint64_t offset;
   Status status;
   BlockBuilder data_block;
@@ -66,7 +71,7 @@ struct TableBuilder::Rep {
   std::string compressed_output;
 };
 
-TableBuilder::TableBuilder(const Options& options, WritableFile* file)
+TableBuilder::TableBuilder(const Options& options, WritableFile** file)
     : rep_(new Rep(options, file)) {
   if (rep_->filter_block != nullptr) {
     rep_->filter_block->StartBlock(0);
@@ -135,7 +140,7 @@ void TableBuilder::Flush() {
   WriteBlock(&r->data_block, &r->pending_handle);
   if (ok()) {
     r->pending_index_entry = true;
-    r->status = r->file->Flush();
+    //r->status = r->file[0]->Flush();
   }
   if (r->filter_block != nullptr) {
     r->filter_block->StartBlock(r->offset);
@@ -198,14 +203,27 @@ void TableBuilder::WriteRawBlock(const Slice& block_contents,
   Rep* r = rep_;
   handle->set_offset(r->offset);
   handle->set_size(block_contents.size());
-  r->status = r->file->Append(block_contents);
+  if(r->options.level<=config::maxlowlevel)
+    r->status = r->file[0]->Append(block_contents);
+  else
+  {
+    memcpy(buffer_+startpoint_,block_contents.data(),block_contents.size());
+    startpoint_ += block_contents.size();
+  }
   if (r->status.ok()) {
     char trailer[kBlockTrailerSize];
     trailer[0] = type;
     uint32_t crc = crc32c::Value(block_contents.data(), block_contents.size());
     crc = crc32c::Extend(crc, trailer, 1);  // Extend crc to cover block type
     EncodeFixed32(trailer + 1, crc32c::Mask(crc));
-    r->status = r->file->Append(Slice(trailer, kBlockTrailerSize));
+    Slice tmp = Slice(trailer, kBlockTrailerSize);
+    if(r->options.level<=config::maxlowlevel)
+      r->status = r->file[0]->Append(tmp);
+    else
+    {
+      memcpy(buffer_+startpoint_,tmp.data(),tmp.size());
+      startpoint_ += tmp.size();
+    }
     if (r->status.ok()) {
       r->offset += block_contents.size() + kBlockTrailerSize;
     }
@@ -215,11 +233,11 @@ void TableBuilder::WriteRawBlock(const Slice& block_contents,
 Status TableBuilder::status() const { return rep_->status; }
 
 Status TableBuilder::Finish() {
-  #ifdef ZAL_TIMER
-  zal_utils::FunctionTimer* TableBuilder_Finish_timer = new zal_utils::FunctionTimer("TableBuilder_Finish@independent");
-  #endif
   Rep* r = rep_;
+  long long Flush_start_time = getCurrentTime();
   Flush();
+  long long Flush_end_time = getCurrentTime();
+  total_times["Flush"] += Flush_end_time - Flush_start_time;
   assert(!r->closed);
   r->closed = true;
 
@@ -266,14 +284,24 @@ Status TableBuilder::Finish() {
     footer.set_index_handle(index_block_handle);
     std::string footer_encoding;
     footer.EncodeTo(&footer_encoding);
-    r->status = r->file->Append(footer_encoding);
+    if(r->options.level<=config::maxlowlevel)
+      r->status = r->file[0]->Append(footer_encoding);
+    else
+    {
+      memcpy(buffer_+startpoint_,footer_encoding.data(),footer_encoding.size());
+      startpoint_ += footer_encoding.size();
+    }
     if (r->status.ok()) {
       r->offset += footer_encoding.size();
     }
   }
-  #ifdef ZAL_TIMER
-  delete TableBuilder_Finish_timer;
-  #endif
+  long long Ec_start_time = getCurrentTime();
+  if(r->options.level>config::maxlowlevel)
+    Ec();
+  long long Ec_end_time = getCurrentTime();
+  total_times["Ec"] += Ec_end_time - Ec_start_time;
+  total_times["sst_others"] += Ec_start_time - Flush_end_time;
+  //printf("options level of finish() : %d\n",r->options.level);
   return r->status;
 }
 
@@ -286,5 +314,53 @@ void TableBuilder::Abandon() {
 uint64_t TableBuilder::NumEntries() const { return rep_->num_entries; }
 
 uint64_t TableBuilder::FileSize() const { return rep_->offset; }
+
+void TableBuilder::Ec() {
+  int ec_m = config::ec_m;
+  int ec_k = config::ec_k;
+  int ec_p = config::ec_p;
+
+  Rep* r = rep_;
+  size_t buffer_length = startpoint_;
+  size_t part_length = buffer_length / ec_k + 1;
+  size_t remain_length = buffer_length % ec_k - ec_k + part_length;
+  size_t current_pos = 0;
+
+  long long realwk_start_time = getCurrentTime();
+  for(int i=0;i<ec_k-1;i++)
+  {
+    r->file[i]->Append(Slice(buffer_+current_pos,part_length));
+    current_pos += part_length;
+  }
+  r->file[ec_k-1]->Append(Slice(buffer_+current_pos,remain_length));
+  long long realwk_end_time = getCurrentTime();
+
+  unsigned char *encode_matrix = (unsigned char *)malloc(ec_m * ec_k);
+	unsigned char *g_tbls = (unsigned char *)malloc(ec_k * ec_p *32);
+  unsigned char *newbuffer[ec_p];
+  for (int i = 0; i < ec_p; i++)
+		newbuffer[i] = (unsigned char * )malloc(part_length);
+  //buffer_.append(part_length - remain_length,'0');
+  gf_gen_cauchy1_matrix(encode_matrix, ec_m, ec_k);
+  ec_init_tables(ec_k, ec_p, &encode_matrix[ec_k * ec_k], g_tbls);
+  unsigned char *buffer[ec_k];
+  for (int i = 0; i < ec_k; i++) buffer[i] = ((unsigned char *)buffer_ + i * part_length);
+  ec_encode_data(part_length, ec_k, ec_p, g_tbls, buffer, newbuffer);
+  
+  long long realwp_start_time = getCurrentTime();
+  for(int i=0;i<ec_p;i++)
+  {
+    r->file[i+ec_k]->Append(Slice((char *)newbuffer[i],part_length));
+  }
+  long long realwp_end_time = getCurrentTime();
+  total_times["realwk"] += realwk_end_time - realwk_start_time;
+  total_times["realwp"] += realwp_end_time - realwp_start_time;
+  total_times["realwk -- realwp"] += realwp_start_time - realwk_end_time;
+
+  free(encode_matrix);
+  free(g_tbls);
+  for (int i = 0; i < ec_p; i++)
+    free(newbuffer[i]);
+}
 
 }  // namespace leveldb

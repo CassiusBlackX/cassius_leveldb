@@ -43,6 +43,9 @@ std::string TableFileName(const std::string& dbname, uint64_t number);
 // "dbname".
 std::string SSTTableFileName(const std::string& dbname, uint64_t number);
 
+// added by lzy to construct the name of a parity block .
+std::string ParityBlockFileName(const std::string& dbname, uint64_t number, int parity_number);
+
 // Return the name of the descriptor file for the db named by
 // "dbname" and the specified incarnation number.  The result will be
 // prefixed with "dbname".

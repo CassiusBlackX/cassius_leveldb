@@ -18,6 +18,8 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
+#include "include/leveldb/replicalog.h"
+
 namespace leveldb {
 
 class MemTable;
@@ -26,9 +28,12 @@ class Version;
 class VersionEdit;
 class VersionSet;
 
+class ReplicaLog;
+
 class DBImpl : public DB {
  public:
   DBImpl(const Options& options, const std::string& dbname);
+  DBImpl(const Options& options, const std::string& dbname, ReplicaLog& replicaLog = ReplicaLog::getNullInstance(), Ecpath& ecpath = Ecpath::getNullInstance());
 
   DBImpl(const DBImpl&) = delete;
   DBImpl& operator=(const DBImpl&) = delete;
@@ -159,10 +164,16 @@ class DBImpl : public DB {
   Env* const env_;
   const InternalKeyComparator internal_comparator_;
   const InternalFilterPolicy internal_filter_policy_;
-  const Options options_;  // options_.comparator == &internal_comparator_
+  Options options_;  // options_.comparator == &internal_comparator_
   const bool owns_info_log_;
   const bool owns_cache_;
   const std::string dbname_;
+
+  // add by wl
+  ReplicaLog replicaLog_;
+
+  // added by lzy .
+  Ecpath ecpath_;
 
   // table_cache_ provides its own synchronization
   TableCache* const table_cache_;
@@ -178,8 +189,16 @@ class DBImpl : public DB {
   MemTable* imm_ GUARDED_BY(mutex_);  // Memtable being compacted
   std::atomic<bool> has_imm_;         // So bg thread can detect non-null imm_
   WritableFile* logfile_;
+  
+  // add by wl
+  std::vector<WritableFile*> logfile_backup;
+
   uint64_t logfile_number_ GUARDED_BY(mutex_);
   log::Writer* log_;
+
+  // Add by WL
+  std::vector<log::Writer*> log_backup;
+
   uint32_t seed_ GUARDED_BY(mutex_);  // For sampling.
 
   // Queue of writers.

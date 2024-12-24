@@ -62,6 +62,9 @@ class MemTable {
   // Else, return false.
   bool Get(const LookupKey& key, std::string* value, Status* s);
 
+  // added by lzy to stall the corresponding lognumber .
+  uint64_t lognumber = 0;
+
  private:
   friend class MemTableIterator;
   friend class MemTableBackwardIterator;

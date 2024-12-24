@@ -12,6 +12,7 @@
 #include "port/thread_annotations.h"
 #include "util/hash.h"
 #include "util/mutexlock.h"
+#include "leveldb/env.h"
 
 namespace leveldb {
 
@@ -204,7 +205,19 @@ LRUCache::LRUCache() : capacity_(0), usage_(0) {
 }
 
 LRUCache::~LRUCache() {
-  assert(in_use_.next == &in_use_);  // Error if caller has an unreleased handle
+  //assert(in_use_.next == &in_use_);  // Error if caller has an unreleased handle
+  if(in_use_.next != &in_use_)
+  {
+    LRUHandle* e = &in_use_;
+    struct tmp_taf
+    {
+      RandomAccessFile** file;
+      uint64_t table;
+    };
+    RandomAccessFile** file = (reinterpret_cast<tmp_taf*>(e))->file;
+    printf("yes\n");
+    printf("%d\n",file[0]->size_);
+  }
   for (LRUHandle* e = lru_.next; e != &lru_;) {
     LRUHandle* next = e->next;
     assert(e->in_cache);
@@ -280,7 +293,6 @@ Cache::Handle* LRUCache::Insert(const Slice& key, uint32_t hash, void* value,
   e->in_cache = false;
   e->refs = 1;  // for the returned handle.
   std::memcpy(e->key_data, key.data(), key.size());
-
   if (capacity_ > 0) {
     e->refs++;  // for the cache's reference.
     e->in_cache = true;

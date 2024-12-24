@@ -113,7 +113,7 @@ struct LEVELDB_EXPORT Options {
   // compactions and hence longer latency/performance hiccups.
   // Another reason to increase this parameter might be when you are
   // initially populating a large database.
-  size_t max_file_size = 2 * 1024 * 1024;
+  size_t max_file_size = 4 * 1024 * 1024;
 
   // Compress blocks using the specified compression algorithm.  This
   // parameter can be changed dynamically.
@@ -145,6 +145,9 @@ struct LEVELDB_EXPORT Options {
   // Many applications will benefit from passing the result of
   // NewBloomFilterPolicy() here.
   const FilterPolicy* filter_policy = nullptr;
+
+  // added by lzy .
+  int level = 0;
 };
 
 // Options that control read operations
@@ -162,6 +165,9 @@ struct LEVELDB_EXPORT ReadOptions {
   // not have been released).  If "snapshot" is null, use an implicit
   // snapshot of the state at the beginning of this read operation.
   const Snapshot* snapshot = nullptr;
+
+  // added by lzy .
+  int level = 0;
 };
 
 // Options that control write operations

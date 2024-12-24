@@ -16,7 +16,7 @@ namespace leveldb {
 class VersionSet;
 
 struct FileMetaData {
-  FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) {}
+  FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0), leader_number(0), lognumber(0), ecnode(0) {}
 
   int refs;
   int allowed_seeks;  // Seeks allowed until compaction
@@ -24,6 +24,11 @@ struct FileMetaData {
   uint64_t file_size;    // File size in bytes
   InternalKey smallest;  // Smallest internal key served by table
   InternalKey largest;   // Largest internal key served by table
+
+  //added by lzy to indicates who is the team leader when the file is merged to ec .
+  uint64_t leader_number;
+  uint64_t lognumber;
+  int ecnode;
 };
 
 class VersionEdit {
@@ -60,13 +65,18 @@ class VersionEdit {
   // Add the specified file at the specified number.
   // REQUIRES: This version has not been saved (see VersionSet::SaveTo)
   // REQUIRES: "smallest" and "largest" are smallest and largest keys in file
+  
+  // changed by lzy .
   void AddFile(int level, uint64_t file, uint64_t file_size,
-               const InternalKey& smallest, const InternalKey& largest) {
+               const InternalKey& smallest, const InternalKey& largest, uint64_t leader, uint64_t log, int ecnode) {
     FileMetaData f;
     f.number = file;
     f.file_size = file_size;
     f.smallest = smallest;
     f.largest = largest;
+    f.leader_number = leader;
+    f.lognumber = log;
+    f.ecnode = ecnode;
     new_files_.push_back(std::make_pair(level, f));
   }
 

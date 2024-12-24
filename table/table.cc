@@ -4,6 +4,7 @@
 
 #include "leveldb/table.h"
 
+#include "db/dbformat.h"
 #include "leveldb/cache.h"
 #include "leveldb/comparator.h"
 #include "leveldb/env.h"
@@ -26,26 +27,74 @@ struct Table::Rep {
 
   Options options;
   Status status;
-  RandomAccessFile* file;
+  RandomAccessFile** file;
   uint64_t cache_id;
   FilterBlockReader* filter;
   const char* filter_data;
 
   BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
   Block* index_block;
+
+  uint64_t size_;
 };
 
-Status Table::Open(const Options& options, RandomAccessFile* file,
-                   uint64_t size, Table** table) {
+Status Table::Open(const Options& options, RandomAccessFile** file,
+                   uint64_t size, Table** table, int level) {
   *table = nullptr;
   if (size < Footer::kEncodedLength) {
     return Status::Corruption("file is too short to be an sstable");
   }
 
+  // added by lzy .
+  int ec_m = config::ec_m;
+  int ec_k = config::ec_k;
+  int ec_p = config::ec_p;
+  file[0]->size_ = size;
+
   char footer_space[Footer::kEncodedLength];
   Slice footer_input;
-  Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
+
+  int stripe_length = (size / 4) + 1;  
+  int start_filenum = (size - Footer::kEncodedLength) / stripe_length;
+  int start_off = (size - Footer::kEncodedLength) % stripe_length;
+  int end_filenum = ec_k - 1;
+  int end_off = size % stripe_length;
+  Status s;
+
+  if(level<=config::maxlowlevel)
+  {
+    s = file[0]->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
                         &footer_input, footer_space);
+  }
+  else
+  {
+    int len = Footer::kEncodedLength;
+    if(start_filenum == end_filenum)
+      s = file[start_filenum]->Read(start_off,Footer::kEncodedLength,&footer_input,footer_space);
+    else
+    {
+      /*
+      s = file[start_filenum]->Read(start_off,stripe_length-start_off,&footer_input,footer_space);
+      s = file[end_filenum]->Read(0,end_off,&footer_input,footer_space+stripe_length-start_off);
+      footer_input = Slice(footer_space,Footer::kEncodedLength);
+      */
+      if(start_filenum + 1 == end_filenum)
+      {
+        s = file[start_filenum]->Read(start_off,stripe_length-start_off,&footer_input,footer_space);
+        s = file[end_filenum]->Read(0,end_off,&footer_input,footer_space+stripe_length-start_off);
+      }
+      else
+      {
+        s = file[start_filenum]->Read(start_off,stripe_length-start_off,&footer_input,footer_space);
+        for(int i=start_filenum+1;i<end_filenum;i++)
+        {
+          s = file[i]->Read(0,stripe_length,&footer_input,footer_space+stripe_length-start_off+(i - start_filenum - 1)*stripe_length);
+        }
+        s = file[end_filenum]->Read(0,end_off,&footer_input,footer_space+stripe_length-start_off+(end_filenum - start_filenum - 1)*stripe_length);
+      }
+      footer_input = Slice(footer_space,len);
+    }
+  }
   if (!s.ok()) return s;
 
   Footer footer;
@@ -55,6 +104,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
   // Read the index block
   BlockContents index_block_contents;
   ReadOptions opt;
+  opt.level = level;
   if (options.paranoid_checks) {
     opt.verify_checksums = true;
   }
@@ -65,21 +115,24 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     // ready to serve requests.
     Block* index_block = new Block(index_block_contents);
     Rep* rep = new Table::Rep;
-    rep->options = options;
+    leveldb::Options new_option = options;
+    new_option.level = level;
+    rep->options = new_option;
     rep->file = file;
     rep->metaindex_handle = footer.metaindex_handle();
     rep->index_block = index_block;
     rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
     rep->filter_data = nullptr;
     rep->filter = nullptr;
+    rep->size_ = size;
     *table = new Table(rep);
-    (*table)->ReadMeta(footer);
+    (*table)->ReadMeta(footer, level);
   }
 
   return s;
 }
 
-void Table::ReadMeta(const Footer& footer) {
+void Table::ReadMeta(const Footer& footer, int level) {
   if (rep_->options.filter_policy == nullptr) {
     return;  // Do not need any metadata
   }
@@ -87,6 +140,7 @@ void Table::ReadMeta(const Footer& footer) {
   // TODO(sanjay): Skip this if footer.metaindex_handle() size indicates
   // it is an empty block.
   ReadOptions opt;
+  opt.level = level;
   if (rep_->options.paranoid_checks) {
     opt.verify_checksums = true;
   }
@@ -102,13 +156,13 @@ void Table::ReadMeta(const Footer& footer) {
   key.append(rep_->options.filter_policy->Name());
   iter->Seek(key);
   if (iter->Valid() && iter->key() == Slice(key)) {
-    ReadFilter(iter->value());
+    ReadFilter(iter->value(), level);
   }
   delete iter;
   delete meta;
 }
 
-void Table::ReadFilter(const Slice& filter_handle_value) {
+void Table::ReadFilter(const Slice& filter_handle_value, int level) {
   Slice v = filter_handle_value;
   BlockHandle filter_handle;
   if (!filter_handle.DecodeFrom(&v).ok()) {
@@ -118,6 +172,7 @@ void Table::ReadFilter(const Slice& filter_handle_value) {
   // We might want to unify with ReadBlock() if we start
   // requiring checksum verification in Table::Open.
   ReadOptions opt;
+  opt.level = level;
   if (rep_->options.paranoid_checks) {
     opt.verify_checksums = true;
   }
@@ -153,6 +208,7 @@ static void ReleaseBlock(void* arg, void* h) {
 Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
                              const Slice& index_value) {
   Table* table = reinterpret_cast<Table*>(arg);
+  table->rep_->file[0]->size_ = table->rep_->size_;
   Cache* block_cache = table->rep_->options.block_cache;
   Block* block = nullptr;
   Cache::Handle* cache_handle = nullptr;
@@ -162,7 +218,6 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
   Status s = handle.DecodeFrom(&input);
   // We intentionally allow extra stuff in index_value so that we
   // can add more features in the future.
-
   if (s.ok()) {
     BlockContents contents;
     if (block_cache != nullptr) {
@@ -266,6 +321,13 @@ uint64_t Table::ApproximateOffsetOf(const Slice& key) const {
   }
   delete index_iter;
   return result;
+}
+
+void Table::filechanger(RandomAccessFile** file, int level)
+{
+  rep_->file = file;
+  rep_->options.level = level;
+  rep_->size_ = file[0]->size_;
 }
 
 }  // namespace leveldb

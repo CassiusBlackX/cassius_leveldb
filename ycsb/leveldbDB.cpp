@@ -4,11 +4,15 @@
 #include <leveldb/write_batch.h>
 #include <leveldb/cache.h>
 #include <leveldb/filter_policy.h>
+#include <leveldb/replicalog.h>
 
 #include "leveldbDB.h"
 #include "core/core_workload.h"
 #include "core/db_factory.h"
 #include "utils/utils.h"
+
+using namespace leveldb;
+using namespace std;
 
 namespace {
 const std::string PROP_NAME = "leveldb.dbname";
@@ -99,6 +103,42 @@ void LeveldbDB::Init() {
     opt.create_if_missing = true;
     GetOptions(props, &opt);
 
+    // added by lzy .
+    const string log_path1 = "/home/user/SSD/disk10/data0";
+    const string log_path2 = "/home/user/SSD/disk10/data0";
+
+    const string ec_path0 = "/home/user/SSD/disk10/data0";
+    const string ec_path1 = "/home/user/SSD/disk11/data1";
+    const string ec_path2 = "/home/user/SSD/disk12/data2";
+    const string ec_path3 = "/home/user/SSD/disk13/data3";
+    const string ec_path4 = "/home/user/SSD/disk14/parity0";
+    const string ec_path5 = "/home/user/SSD/disk15/parity1";
+
+    const int replicaNum=2;
+    const int ecNum = 6;
+
+    std::vector<std::string> replicapath;
+
+    replicapath.push_back(log_path1);
+    replicapath.push_back(log_path2);
+
+    ReplicaLog replicalog;   
+
+    replicalog.setReplicaMeta(replicaNum,replicapath);
+
+    std::vector<std::string> ecpath;
+
+    ecpath.push_back(ec_path0);
+    ecpath.push_back(ec_path1);
+    ecpath.push_back(ec_path2);
+    ecpath.push_back(ec_path3);
+    ecpath.push_back(ec_path4);
+    ecpath.push_back(ec_path5);
+
+    Ecpath Aecpath;   
+
+    Aecpath.setEcpathMeta(ecNum,ecpath);
+
     leveldb::Status s;
 
     if (props.GetProperty(PROP_DESTROY, PROP_DESTROY_DEFAULT) == "true") {
@@ -107,7 +147,7 @@ void LeveldbDB::Init() {
         throw utils::Exception(std::string("LevelDB DestroyDB: ") + s.ToString());
         }
     }
-    s = leveldb::DB::Open(opt, db_path, &db_);
+    s = leveldb::DB::Open(opt, db_path, &db_, replicalog, Aecpath);
     if (!s.ok()) {
         throw utils::Exception(std::string("LevelDB Open: ") + s.ToString());
     }

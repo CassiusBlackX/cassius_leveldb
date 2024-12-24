@@ -11,6 +11,7 @@
 #include "leveldb/export.h"
 #include "leveldb/iterator.h"
 #include "leveldb/options.h"
+#include "leveldb/replicalog.h"
 
 namespace leveldb {
 
@@ -51,7 +52,7 @@ class LEVELDB_EXPORT DB {
   // Stores nullptr in *dbptr and returns a non-OK status on error.
   // Caller should delete *dbptr when it is no longer needed.
   static Status Open(const Options& options, const std::string& name,
-                     DB** dbptr);
+                     DB** dbptr, ReplicaLog& replicaLog = ReplicaLog::getNullInstance(), Ecpath& ecpath = Ecpath::getNullInstance());
 
   DB() = default;
 

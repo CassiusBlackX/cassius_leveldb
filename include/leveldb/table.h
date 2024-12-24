@@ -37,8 +37,8 @@ class LEVELDB_EXPORT Table {
   // for the duration of the returned table's lifetime.
   //
   // *file must remain live while this Table is in use.
-  static Status Open(const Options& options, RandomAccessFile* file,
-                     uint64_t file_size, Table** table);
+  static Status Open(const Options& options, RandomAccessFile** file,
+                     uint64_t file_size, Table** table, int level);
 
   Table(const Table&) = delete;
   Table& operator=(const Table&) = delete;
@@ -58,6 +58,8 @@ class LEVELDB_EXPORT Table {
   // be close to the file length.
   uint64_t ApproximateOffsetOf(const Slice& key) const;
 
+  void filechanger(RandomAccessFile** file, int level);
+
  private:
   friend class TableCache;
   struct Rep;
@@ -73,10 +75,10 @@ class LEVELDB_EXPORT Table {
                      void (*handle_result)(void* arg, const Slice& k,
                                            const Slice& v));
 
-  void ReadMeta(const Footer& footer);
-  void ReadFilter(const Slice& filter_handle_value);
+  void ReadMeta(const Footer& footer, int level);
+  void ReadFilter(const Slice& filter_handle_value, int level);
 
-  Rep* const rep_;
+  Rep* rep_;
 };
 
 }  // namespace leveldb

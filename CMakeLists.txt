@@ -161,8 +161,14 @@ target_link_libraries(benchmark_ycsb pthread)
 
 # basic_ycsb_demo
 add_executable(basic_ycsb_demo ${CMAKE_CURRENT_SOURCE_DIR}/src/basic_ycsb_demo.cpp ${YCSB_SOURCES} ${LEVELDB_SOURCES} ${UTILS_FILES})
+target_sources(basic_ycsb_demo PRIVATE 
+    ${LEVELDB_ROOT_DIR}/util/ec/ecdisk.cc
+    # ${LEVELDB_ROOT_DIR}/util/ec/ecmeta.cc
+    ${LEVELDB_ROOT_DIR}/util/ec/ecstripe.cc
+    ${LEVELDB_ROOT_DIR}/util/ec/replicalog.cc
+)
 target_include_directories(basic_ycsb_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
 target_compile_definitions(basic_ycsb_demo PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
 )
-target_link_libraries(basic_ycsb_demo pthread)
+target_link_libraries(basic_ycsb_demo pthread /lib/libisal.a)

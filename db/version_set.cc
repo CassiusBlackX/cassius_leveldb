@@ -19,10 +19,8 @@
 #include "util/coding.h"
 #include "util/logging.h"
 
-#ifdef TRACE_KV
-extern zal_utils::ThreadSafeQueue<std::tuple<std::string, size_t>> tsQueue_key_table;
-extern zal_utils::ThreadSafeQueue<zal_utils::build_table_queue> build_table_queue;
-#endif
+// added by lzy to do ec .
+#include "isa-l.h"
 
 namespace leveldb {
 
@@ -220,7 +218,7 @@ static Iterator* GetFileIterator(void* arg, const ReadOptions& options,
         Status::Corruption("FileReader invoked with unexpected value"));
   } else {
     return cache->NewIterator(options, DecodeFixed64(file_value.data()),
-                              DecodeFixed64(file_value.data() + 8));
+                              DecodeFixed64(file_value.data() + 8), options.level);
   }
 }
 
@@ -236,15 +234,18 @@ void Version::AddIterators(const ReadOptions& options,
   // Merge all level zero files together since they may overlap
   for (size_t i = 0; i < files_[0].size(); i++) {
     iters->push_back(vset_->table_cache_->NewIterator(
-        options, files_[0][i]->number, files_[0][i]->file_size));
+        options, files_[0][i]->number, files_[0][i]->file_size, 0));
   }
 
   // For levels > 0, we can use a concatenating iterator that sequentially
   // walks through the non-overlapping files in the level, opening them
   // lazily.
   for (int level = 1; level < config::kNumLevels; level++) {
+    // added by lzy .
+    ReadOptions options_new = options;
+    options_new.level = level;
     if (!files_[level].empty()) {
-      iters->push_back(NewConcatenatingIterator(options, level));
+      iters->push_back(NewConcatenatingIterator(options_new, level));
     }
   }
 }
@@ -326,7 +327,7 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
   }
 }
 
-Status Version::Get(const ReadOptions& options, const LookupKey& k,
+Status Version::Get(ReadOptions& options, const LookupKey& k,
                     std::string* value, GetStats* stats) {
   stats->seek_file = nullptr;
   stats->seek_file_level = -1;
@@ -334,7 +335,7 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
   struct State {
     Saver saver;
     GetStats* stats;
-    const ReadOptions* options;
+    ReadOptions* options;
     Slice ikey;
     FileMetaData* last_file_read;
     int last_file_read_level;
@@ -356,9 +357,10 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
       state->last_file_read = f;
       state->last_file_read_level = level;
 
+      state->options->level = level;
       state->s = state->vset->table_cache_->Get(*state->options, f->number,
                                                 f->file_size, state->ikey,
-                                                &state->saver, SaveValue);
+                                                &state->saver, SaveValue, level);
       if (!state->s.ok()) {
         state->found = true;
         return false;
@@ -568,6 +570,335 @@ std::string Version::DebugString() const {
   return r;
 }
 
+// added by lzy to realize low-level ec .
+int Version::LowLevelEc(int forced)
+{
+  int ec_m = config::ec_m;
+  int ec_k = config::ec_k;
+  int ec_p = config::ec_p;
+
+  FileMetaData* filestoec[ec_k];
+  int numtoec = 0;
+  for (int level_tmp = 0; level_tmp <= config::maxlowlevel; level_tmp++)
+  {
+    for(size_t i=0;i<files_[level_tmp].size();i++)
+    {
+      FileMetaData* f = files_[level_tmp][i];
+      if(f->leader_number == forced)
+      {
+        if(forced == 1)
+          filestoec[numtoec++] = f;
+        else
+        {
+          numtoec++;
+          filestoec[f->ecnode] = f;
+        }
+      }
+      if(numtoec == 4)
+      {
+        int changedfiles = 0;
+        uint64_t changedbytes = 0;
+        for(int i=0;i<ec_k;i++)
+        {
+          if(filestoec[i]->ecnode != i)
+          {
+            changedfiles++;
+            changedbytes+=filestoec[i]->file_size;
+          }
+        }
+        int buffer_size = 0;
+        for(int j=0;j<ec_k;j++)
+        {
+          if(buffer_size < filestoec[j]->file_size)
+            buffer_size = filestoec[j]->file_size;
+        }
+        const char* forced_str = forced?"(Forced)":"";
+        Log(vset_->options_->info_log, "%sWe will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+         forced_str,
+         filestoec[0]->number, filestoec[0]->ecnode, 0,
+         filestoec[1]->number, filestoec[1]->ecnode, 1,
+         filestoec[2]->number, filestoec[2]->ecnode, 2,
+         filestoec[3]->number, filestoec[3]->ecnode, 3,
+         changedfiles, changedbytes, buffer_size*ec_p);
+        if(!forced)
+        {
+          for(int i=0;i<ec_k;i++)
+          {
+            Log(vset_->options_->info_log, "SST %d has %lld bytes from %s to %s , its disk number is %d",
+                filestoec[i]->number, filestoec[i]->file_size,
+                filestoec[i]->smallest.user_key().ToString().c_str(), filestoec[i]->largest.user_key().ToString().c_str(), filestoec[i]->ecnode);
+          }
+        }
+
+        for(int i=0;i<ec_k;i++)
+          filestoec[i]->ecnode = i;
+        
+        for(int j=0;j<ec_k;j++)
+        {
+          filestoec[j]->leader_number = filestoec[0]->number;
+        }
+        std::string fname[ec_m+1];
+        for(int j=0;j<ec_k;j++)
+          fname[j] = TableFileName(vset_->dbname_, filestoec[j]->number);
+        for(int j=ec_k;j<ec_m;j++)
+          fname[j] = ParityBlockFileName(vset_->dbname_, filestoec[0]->number, j-ec_k);
+
+        char *input_buffer[ec_k];
+        for(int j=0;j<ec_k;j++)
+        {
+          input_buffer[j] = (char *)malloc(buffer_size+1);
+          memset(input_buffer[j],0,buffer_size);
+        }
+
+        char *output_buffer[ec_p];
+        for(int j=0;j<ec_p;j++)
+        {
+          output_buffer[j] = (char *)malloc(buffer_size+1);
+        }
+
+        FILE *file;
+        for(int j=0;j<ec_k;j++)
+        {
+          file = fopen(fname[j].c_str(),"r");
+          fread(input_buffer[j],1,filestoec[j]->file_size,file);
+          fclose(file);
+        }
+
+        unsigned char *encode_matrix = (unsigned char*)malloc(ec_m * ec_k);
+        unsigned char *g_tbls = (unsigned char*)malloc(ec_k * ec_p * 32);
+        gf_gen_cauchy1_matrix(encode_matrix, ec_m, ec_k);
+        ec_init_tables(ec_k, ec_p, &encode_matrix[ec_k * ec_k], g_tbls);
+        ec_encode_data(buffer_size, ec_k, ec_p, g_tbls, (unsigned char **)input_buffer, (unsigned char **)output_buffer);
+
+        free(encode_matrix);
+        free(g_tbls);
+        
+        for(int j=ec_k;j<ec_m;j++)
+        {
+          file = fopen(fname[j].c_str(),"w");
+          fwrite(output_buffer[j-ec_k],1,buffer_size,file);
+          fclose(file);
+        }
+
+        for(int j=0;j<ec_k;j++)
+          free(input_buffer[j]);
+        for(int j=0;j<ec_p;j++)
+          free(output_buffer[j]);
+
+        for(int j=0;j<ec_k;j++)
+          if(filestoec[j]->lognumber != 0)
+            waitforec_.erase(filestoec[j]->lognumber);
+
+        numtoec = 0;
+      }
+    }
+  }
+  if(forced && numtoec)
+  { 
+    int log_content[ec_k][2];
+    for(int j=0;j<ec_k;j++)
+    {
+      if(j<numtoec)
+      {
+        log_content[j][0] = filestoec[j]->number;
+        log_content[j][1] = filestoec[j]->ecnode;
+      }
+      else
+      {
+        log_content[j][0] = 0;
+        log_content[j][1] = 0;
+      }
+    }
+    int changedfiles = 0;
+    uint64_t changedbytes = 0;
+    for(int j=0;j<numtoec;j++)
+    {
+      if(filestoec[j]->ecnode != j)
+      {
+        changedfiles++;
+        changedbytes+=filestoec[j]->file_size;
+      }
+    }
+    int buffer_size = 0;
+    for(int j=0;j<numtoec;j++)
+    {
+      if(buffer_size < filestoec[j]->file_size)
+        buffer_size = filestoec[j]->file_size;
+    }
+    Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+      log_content[0][0], log_content[0][1], 0,
+      log_content[1][0], log_content[1][1], 1,
+      log_content[2][0], log_content[2][1], 2,
+      log_content[3][0], log_content[3][1], 3,
+      changedfiles, changedbytes, buffer_size*ec_p);
+
+    for(int j=0;j<numtoec;j++)
+      filestoec[j]->ecnode = j;
+
+    for(int j=0;j<numtoec;j++)
+    {
+      filestoec[j]->leader_number = filestoec[0]->number;
+    }
+    std::string fname[ec_m];
+    for(int j=0;j<numtoec;j++)
+      fname[j] = TableFileName(vset_->dbname_, filestoec[j]->number);
+    for(int j=ec_k;j<ec_m;j++)
+      fname[j] = ParityBlockFileName(vset_->dbname_, filestoec[0]->number, j-ec_k);
+
+    char *input_buffer[ec_k];
+    for(int j=0;j<ec_k;j++)
+    {
+      input_buffer[j] = (char *)malloc(buffer_size+1);
+      memset(input_buffer[j],0,buffer_size);
+    }
+
+    char *output_buffer[ec_p];
+    for(int j=0;j<ec_p;j++)
+    {
+      output_buffer[j] = (char *)malloc(buffer_size+1);
+    }
+
+    FILE *file;
+    for(int j=0;j<numtoec;j++)
+    {
+      file = fopen(fname[j].c_str(),"r");
+      fread(input_buffer[j],1,filestoec[j]->file_size,file);
+      fclose(file);
+    }
+
+    unsigned char *encode_matrix = (unsigned char*)malloc(ec_m * ec_k);
+    unsigned char *g_tbls = (unsigned char*)malloc(ec_k * ec_p * 32);
+    gf_gen_cauchy1_matrix(encode_matrix, ec_m, ec_k);
+    ec_init_tables(ec_k, ec_p, &encode_matrix[ec_k * ec_k], g_tbls);
+    ec_encode_data(buffer_size, ec_k, ec_p, g_tbls, (unsigned char **)input_buffer, (unsigned char **)output_buffer);
+
+    free(encode_matrix);
+    free(g_tbls);
+    
+    for(int j=ec_k;j<ec_m;j++)
+    {
+      file = fopen(fname[j].c_str(),"w");
+      fwrite(output_buffer[j-ec_k],1,buffer_size,file);
+      fclose(file);
+    }
+
+    for(int j=0;j<ec_k;j++)
+      free(input_buffer[j]);
+    for(int j=0;j<ec_p;j++)
+      free(output_buffer[j]);
+
+    for(int j=0;j<numtoec;j++)
+      if(filestoec[j]->lognumber != 0)
+        waitforec_.erase(filestoec[j]->lognumber);
+  }
+  return 1;
+}
+
+int Version::EcMark(std::set<uint64_t> whichtoec)
+{
+  for(int level=0;level<=config::maxlowlevel;level++)
+  {
+    for(size_t i=0;i<files_[level].size();i++)
+    {
+      FileMetaData* f = files_[level][i];
+      if(whichtoec.find(f->leader_number) != whichtoec.end())
+        f->leader_number = 1;
+    }
+  }
+  return 1;
+}
+
+int Version::HighLevelEc(FileMetaData *f, Ecpath ecpath)
+{
+  int ec_m = config::ec_m;
+  int ec_k = config::ec_k;
+  int ec_p = config::ec_p;
+
+  std::string fname_init;
+  std::string fname[ec_m];
+  
+  fname_init = TableFileName(vset_->dbname_, f->number);
+  for(int i=0;i<ec_m;i++)
+    fname[i] = ParityBlockFileName(ecpath.getEcpath()[i], f->number, i);
+
+  char *input_buffer[ec_k];
+  int buffer_size = f->file_size / ec_k + 1;
+  int remain_size = f->file_size - buffer_size * (ec_k - 1);
+
+  for(int i=0;i<ec_k;i++)
+  {
+    input_buffer[i] = (char *)malloc(buffer_size+1);
+    memset(input_buffer[i],0,buffer_size);
+  }
+
+  char *output_buffer[ec_p];
+  for(int i=0;i<ec_p;i++)
+  {
+    output_buffer[i] = (char *)malloc(buffer_size+1);
+  }
+
+  FILE *file = fopen(fname_init.c_str(),"r");;
+  for(int i=0;i<ec_k;i++)
+  {
+    if(i == ec_k - 1)
+    {
+      fread(input_buffer[i],1,remain_size,file);
+    }
+    else
+    {
+      fread(input_buffer[i],1,buffer_size,file);
+    }
+  }
+  fclose(file);
+
+  unsigned char *encode_matrix = (unsigned char*)malloc(ec_m * ec_k);
+  unsigned char *g_tbls = (unsigned char*)malloc(ec_k * ec_p * 32);
+  gf_gen_cauchy1_matrix(encode_matrix, ec_m, ec_k);
+  ec_init_tables(ec_k, ec_p, &encode_matrix[ec_k * ec_k], g_tbls);
+  ec_encode_data(buffer_size, ec_k, ec_p, g_tbls, (unsigned char **)input_buffer, (unsigned char **)output_buffer);
+
+  free(encode_matrix);
+  free(g_tbls);
+  
+  for(int i=0;i<ec_k;i++)
+  {
+    file = fopen(fname[i].c_str(),"w");
+    fwrite(input_buffer[i],1,buffer_size,file);
+    fclose(file);
+  }
+  for(int i=ec_k;i<ec_m;i++)
+  {
+    file = fopen(fname[i].c_str(),"w");
+    fwrite(output_buffer[i-ec_k],1,buffer_size,file);
+    fclose(file);
+  }
+
+  for(int j=0;j<ec_k;j++)
+    free(input_buffer[j]);
+  for(int j=0;j<ec_p;j++)
+    free(output_buffer[j]);
+      
+  return 1;
+}
+
+int Version::Findstripe(uint64_t leadernumber, FileMetaData* returnf[], int *findnum)
+{
+  *findnum = 0;
+  for(int level_tmp = 0; level_tmp <= config::maxlowlevel; level_tmp++)
+  {
+    for(size_t i=0;i<files_[level_tmp].size();i++)
+    {
+      FileMetaData* f = files_[level_tmp][i];
+      if(f->leader_number == leadernumber)
+      {
+        returnf[*findnum] = f;
+        *findnum = *findnum + 1;
+      }
+    }
+  }
+  return 1;
+}
+
 // A helper class so we can efficiently apply a whole sequence
 // of edits to a particular state without creating intermediate
 // Versions that contain full copies of the intermediate state.
@@ -597,6 +928,7 @@ class VersionSet::Builder {
   VersionSet* vset_;
   Version* base_;
   LevelState levels_[config::kNumLevels];
+  int ecnode_waiting[4];
 
  public:
   // Initialize a builder with the files from *base and other info from *vset
@@ -607,6 +939,8 @@ class VersionSet::Builder {
     for (int level = 0; level < config::kNumLevels; level++) {
       levels_[level].added_files = new FileSet(cmp);
     }
+    for(int i=0;i<config::ec_k;i++)
+      ecnode_waiting[i] = base->ecnode_waiting[i];
   }
 
   ~Builder() {
@@ -677,6 +1011,8 @@ class VersionSet::Builder {
   void SaveTo(Version* v) {
     BySmallestKey cmp;
     cmp.internal_comparator = &vset_->icmp_;
+    for(int i=0;i<4;i++)
+      v->ecnode_waiting[i] = ecnode_waiting[i];
     for (int level = 0; level < config::kNumLevels; level++) {
       // Merge the set of added files with the set of pre-existing files.
       // Drop any deleted files.  Store the result in *v.
@@ -859,19 +1195,6 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
       env_->RemoveFile(new_manifest_file);
     }
   }
-
-#ifdef PRINT_LEVEL
-// only when both PRINT_LEVEL and ZAL_DEBUG are defined, print the level information
-  printf("Compaction completed. SSTable numbers by level:\n");
-  for (int level = 0; level < 4; level++) {
-    const std::vector<FileMetaData*>& files = current_->files_[level];
-    printf("Level %d: ", level);
-    for (size_t i = 0; i < files.size(); i++) {
-      printf("%ld, ",files[i]->number);
-    }
-   printf("\n");
-  }
-#endif
 
   return s;
 }
@@ -1105,7 +1428,7 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
     const std::vector<FileMetaData*>& files = current_->files_[level];
     for (size_t i = 0; i < files.size(); i++) {
       const FileMetaData* f = files[i];
-      edit.AddFile(level, f->number, f->file_size, f->smallest, f->largest);
+      edit.AddFile(level, f->number, f->file_size, f->smallest, f->largest, f->leader_number, f->lognumber, f->ecnode);
     }
   }
 
@@ -1152,8 +1475,10 @@ uint64_t VersionSet::ApproximateOffsetOf(Version* v, const InternalKey& ikey) {
         // "ikey" falls in the range for this table.  Add the
         // approximate offset of "ikey" within the table.
         Table* tableptr;
+        leveldb::ReadOptions opt = ReadOptions();
+        opt.level = level;
         Iterator* iter = table_cache_->NewIterator(
-            ReadOptions(), files[i]->number, files[i]->file_size, &tableptr);
+            opt, files[i]->number, files[i]->file_size, level, &tableptr);
         if (tableptr != nullptr) {
           result += tableptr->ApproximateOffsetOf(ikey.Encode());
         }
@@ -1250,10 +1575,12 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
       if (c->level() + which == 0) {
         const std::vector<FileMetaData*>& files = c->inputs_[which];
         for (size_t i = 0; i < files.size(); i++) {
+          options.level = c->level() + which;
           list[num++] = table_cache_->NewIterator(options, files[i]->number,
-                                                  files[i]->file_size);
+                                                  files[i]->file_size, c->level()+which);
         }
       } else {
+        options.level = c->level() + which;
         // Create concatenating iterator for the files from this level
         list[num++] = NewTwoLevelIterator(
             new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]),
@@ -1276,9 +1603,6 @@ Compaction* VersionSet::PickCompaction() {
   const bool size_compaction = (current_->compaction_score_ >= 1);
   const bool seek_compaction = (current_->file_to_compact_ != nullptr);
   if (size_compaction) {
-    #ifdef LOG_COMPACTION
-    printf(" *****Triggered size compaction!! *********\n");
-    #endif
     level = current_->compaction_level_;
     assert(level >= 0);
     assert(level + 1 < config::kNumLevels);
@@ -1298,9 +1622,6 @@ Compaction* VersionSet::PickCompaction() {
       c->inputs_[0].push_back(current_->files_[level][0]);
     }
   } else if (seek_compaction) {
-    #ifdef LOG_COMPACTION
-    printf(" *****Triggered seek compaction!! *********\n");
-    #endif
     level = current_->file_to_compact_level_;
     c = new Compaction(options_, level);
     c->inputs_[0].push_back(current_->file_to_compact_);
@@ -1336,24 +1657,12 @@ bool FindLargestKey(const InternalKeyComparator& icmp,
     return false;
   }
   *largest_key = files[0]->largest;
-  #ifdef TRACE_KV
-  size_t number = files[0]->number;
-  FileMetaData* largest_key_s_file = files[0];
-  #endif
   for (size_t i = 1; i < files.size(); ++i) {
     FileMetaData* f = files[i];
     if (icmp.Compare(f->largest, *largest_key) > 0) {
       *largest_key = f->largest;
-      #ifdef TRACE_KV
-      number = f->number;
-      largest_key_s_file = f;
-      #endif
     }
   }
-  #ifdef TRACE_KV
-  tsQueue_key_table.push(std::make_tuple(largest_key->user_key().ToString(), number));
-  build_table_queue.push(zal_utils::build_table_queue(number, largest_key_s_file->smallest.user_key().ToString(), largest_key_s_file->largest.user_key().ToString()));
-  #endif
   return true;
 }
 
@@ -1376,12 +1685,6 @@ FileMetaData* FindSmallestBoundaryFile(
       }
     }
   }
-  #ifdef TRACE_KV
-  if (smallest_boundary_file != nullptr) {
-      tsQueue_key_table.push(std::make_tuple(smallest_boundary_file->smallest.user_key().ToString(), smallest_boundary_file->number));
-    build_table_queue.push((zal_utils::build_table_queue(smallest_boundary_file->number, smallest_boundary_file->smallest.user_key().ToString(), smallest_boundary_file->largest.user_key().ToString())));
-  }
-  #endif
   return smallest_boundary_file;
 }
 
@@ -1416,11 +1719,6 @@ void AddBoundaryInputs(const InternalKeyComparator& icmp,
 
     // If a boundary file was found advance largest_key, otherwise we're done.
     if (smallest_boundary_file != NULL) {
-      #ifdef ZAL_DEBUG
-      // printf("\t found another file with smallest in file %lu --------\n", smallest_boundary_file->number);
-      continue_searching = false;
-      continue;
-      #endif
       compaction_files->push_back(smallest_boundary_file);
       largest_key = smallest_boundary_file->largest;
     } else {
@@ -1548,9 +1846,13 @@ bool Compaction::IsTrivialMove() const {
   // Avoid a move if there is lots of overlapping grandparent data.
   // Otherwise, the move could create a parent file that will require
   // a very expensive merge later on.
-  return (num_input_files(0) == 1 && num_input_files(1) == 0 &&
+  int flag = num_input_files(0) == 1 && num_input_files(1) == 0 &&
           TotalFileSize(grandparents_) <=
-              MaxGrandParentOverlapBytes(vset->options_));
+              MaxGrandParentOverlapBytes(vset->options_);
+  if(flag && level_ == config::maxlowlevel)
+    Log(vset->options_->info_log, "killed trivialmove\n");
+  //return (flag && level_!=config::maxlowlevel);
+  return flag;
 }
 
 void Compaction::AddInputDeletions(VersionEdit* edit) {

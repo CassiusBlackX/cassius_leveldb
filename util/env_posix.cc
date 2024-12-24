@@ -36,6 +36,9 @@
 #include "util/env_posix_test_helper.h"
 #include "util/posix_logger.h"
 
+#include "include/leveldb/timer.h"
+#include <fstream>
+
 namespace leveldb {
 
 namespace {
@@ -262,10 +265,12 @@ class PosixMmapReadableFile final : public RandomAccessFile {
       *result = Slice();
       return PosixError(filename_, EINVAL);
     }
-
+    std::memcpy(scratch,mmap_base_ + offset,n);
     *result = Slice(mmap_base_ + offset, n);
     return Status::OK();
   }
+
+  uint64_t size_;
 
  private:
   char* const mmap_base_;
@@ -293,7 +298,45 @@ class PosixWritableFile final : public WritableFile {
   Status Append(const Slice& data) override {
     size_t write_size = data.size();
     const char* write_data = data.data();
-
+    
+    if(write_size > 2 * kWritableFileBufferSize)
+    {
+      char buffer[4 * 1024 * 1024];
+      std::ofstream output(filename_.c_str());
+      long long appw_s_t = getCurrentTime();
+      //output.rdbuf()->pubsetbuf(buffer,4 * 1024 * 1024);
+      output.write(write_data,write_size);
+      output.close();
+      long long appw_e_t = getCurrentTime();
+      total_times["appw"] += appw_e_t - appw_s_t;
+      return Status::OK();
+      /*
+      FILE *fp;
+      fp = fopen(filename_.c_str(),"w");
+      long long appw_s_t = getCurrentTime();
+      fwrite(write_data,1,write_size,fp);
+      fclose(fp);
+      long long appw_e_t = getCurrentTime();
+      total_times["appw"] += appw_e_t - appw_s_t;
+      return Status::OK();*/
+    }
+    
+    /*
+    if(write_size > 2 * kWritableFileBufferSize)
+{
+    std::ofstream output(filename_.c_str(),std::ios::binary);
+    while(write_size >1024*1024)
+    {
+      memcpy(buffer,write_data,1024*1024);
+      output.write(buffer,1024*1024);
+      write_data += 1024*1024;
+      write_size -= 1024*1024;
+    }
+    memcpy(buffer,write_data,write_size);
+    output.write(buffer, write_size);
+    output.close();
+    return Status::OK();
+}   */
     // Fit as much as possible into buffer.
     size_t copy_size = std::min(write_size, kWritableFileBufferSize - pos_);
     std::memcpy(buf_ + pos_, write_data, copy_size);
@@ -612,6 +655,15 @@ class PosixEnv : public Env {
       result->emplace_back(entry->d_name);
     }
     ::closedir(dir);
+    /*
+    // added by lzy .
+    dir = ::opendir("/home/wl/SSD/disk10/sst");
+    while((entry = ::readdir(dir)) != nullptr)
+    {
+      result->emplace_back(entry->d_name);
+    }
+    ::closedir(dir);
+    */
     return Status::OK();
   }
 

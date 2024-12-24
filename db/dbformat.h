@@ -44,6 +44,14 @@ static const int kMaxMemCompactLevel = 2;
 // Approximate gap in bytes between samples of data read during iteration.
 static const int kReadBytesPeriod = 1048576;
 
+// added by lzy to set the parameters of ec . 
+static const int ec_m = 6;
+static const int ec_k = 4;
+static const int ec_p = 2;
+
+// added by lzy .
+static const int maxlowlevel = 6;
+
 }  // namespace config
 
 class InternalKey;
