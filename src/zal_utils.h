@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <string>
 #include <map>
+#include <unordered_set>
 #include <chrono>
 #include <leveldb/db.h>
 #include <random>
@@ -72,6 +73,99 @@ private:
     size_t capacity_;
 };
 
+/// thread_safe_set
+template <typename T>
+class ThreadSafeSet {
+public:
+    ThreadSafeSet() = default;
+    ~ThreadSafeSet() = default;
+
+    void insert(const T& value) {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        set_.insert(value);
+    }
+
+    void erase(const T& value) {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        set_.erase(value);
+    }
+
+    bool contains(const T& value) const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return set_.find(value) != set_.end();
+    }
+
+    bool empty() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return set_.empty();
+    }
+
+    size_t size() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return set_.size();
+    }
+
+    void clear() {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        set_.clear();
+    }
+
+    std::optional<T> find(const T& value) const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        auto it = set_.find(value);
+        if (it != set_.end()) {
+            return *it;
+        }
+        return std::nullopt; // 返回空值表示未找到
+    }
+
+    class Iterator {
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = const T*;
+        using reference = const T&;
+
+        Iterator(typename std::unordered_set<T>::const_iterator it) : it_(it) {}
+
+        reference operator*() const { return *it_; }
+        pointer operator->() const { return &(*it_); }
+
+        Iterator& operator++() {
+            ++it_;
+            return *this;
+        }
+
+        Iterator operator++(int) {
+            Iterator tmp = *this;
+            ++it_;
+            return tmp;
+        }
+
+        friend bool operator==(const Iterator& a, const Iterator& b) { return a.it_ == b.it_; }
+        friend bool operator!=(const Iterator& a, const Iterator& b) { return a.it_ != b.it_; }
+
+    private:
+        typename std::unordered_set<T>::const_iterator it_;
+    };
+
+    // 返回迭代器的begin和end方法
+    Iterator begin() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return Iterator(set_.begin());
+    }
+
+    Iterator end() const {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        return Iterator(set_.end());
+    }
+
+private:
+    std::unordered_set<T> set_;
+    mutable std::shared_mutex mutex_;
+};
+
 /// custom snapshot
 class CSnapshot {
 public:
@@ -114,21 +208,39 @@ std::string replaceDiskNumber(const std::string& pathStr, unsigned diskNumber);
 std::string replaceDiskNumber(const std::string& pathStr, unsigned diskNumber, int rindex);
 
 struct table_info {
-    unsigned index;
-    unsigned level;
+    int index;
+    int level;
+    int stripe_id;
+    int disk_id;
     std::string smallest_key;
     std::string largest_key;
     size_t table_size;
 
     table_info() = default;
-    table_info(unsigned index, unsigned level, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(level), smallest_key(smallest), largest_key(largest), table_size(size) {}
-    table_info(unsigned index, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(static_cast<unsigned>(-1)), smallest_key(smallest), largest_key(largest), table_size(size) {}
+    table_info(int index, int level, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(level), smallest_key(smallest), largest_key(largest), table_size(size), stripe_id(-1), disk_id(-1) {}
+    table_info(int index, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(-1), smallest_key(smallest), largest_key(largest), table_size(size), stripe_id(-1), disk_id(-1) {}
+    table_info(int index, int disk_id, size_t size) : index(index), level(-1), stripe_id(-1), disk_id(disk_id), table_size(size) {}
+    table_info(const table_info& other) = default;
+
+    table_info& operator=(const table_info& other) = default;
+
     bool operator<(const table_info& other) const {
         return index < other.index;
     }
 
+    bool operator==(const table_info& other) const {
+        // since lzy did not store `largest_key` and `smallest_key` in every `FileMetaData`, we can not compare them
+        return index == other.index
+            // && smallest_key == other.smallest_key
+            // && largest_key == other.largest_key
+            // && table_size == other.table_size
+            && stripe_id == other.stripe_id
+            && disk_id == other.disk_id
+            ;
+    }
+
     void print() const {
-        if (level == static_cast<unsigned>(-1)) {
+        if (level == -1) {
             std::cout << "table " << index << " range: " << smallest_key << " - " << largest_key << " size: " << table_size << std::endl;
             return;
         }
@@ -164,10 +276,66 @@ struct compaction_info {
         std::cout << std::endl;
     }
 };
+
+struct StripeRecorder {
+    int id;
+    std::vector<int> tables;  // vector to store the index of the sst once in the stripe
+
+    StripeRecorder() = default;
+    StripeRecorder(int id) : id(id) {}
+
+    bool operator==(const StripeRecorder& other) const {
+        // as long as tables are the same, we think they are the same stripe
+        for (int i = 0; i < this->tables.size() < other.tables.size() ? this->tables.size() : other.tables.size(); i++) {
+            if (this->tables[i] != other.tables[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool operator<(const StripeRecorder& other) const {
+        return id < other.id;
+    }
+
+    void print() const {
+        std::cout << "stripe: " << id << " tables_id: ";
+        for (int i = 0; i < tables.size(); i++) {
+            std::cout << tables[i];
+            if (i != tables.size() - 1) {
+                std::cout << ", ";
+            }
+        }
+        std::cout << std::endl;
+    }
+};
 } // namespace zal_utils
 
-#define ec_m 6
-#define ec_k 4
-#define ec_p (ec_m - ec_k)
-
+// reload std::hash for `table_info` and `StripeRecorder`
+namespace std {
+template <>
+struct hash<zal_utils::StripeRecorder> {
+    size_t operator()(const zal_utils::StripeRecorder& x) const {
+        size_t h = 0;
+        for (auto i : x.tables) {
+            h ^= std::hash<int>()(i);
+        }
+        return h;
+    }
+};
+template <>
+struct hash<zal_utils::table_info> {
+    size_t operator()(const zal_utils::table_info &t) const {
+        // since lzy is not storing `smallest_key` and `largest_key` in every `FileMetaData`, we can not use them to calculate hash
+        std::size_t h1 = std::hash<int>()(t.index);
+        // std::size_t h2 = std::hash<std::string>()(t.smallest_key);
+        // std::size_t h3 = std::hash<std::string>()(t.largest_key);
+        // std::size_t h4 = std::hash<size_t>()(t.table_size);
+        // return h1 ^ (h2 << 1) ^ (h3 << 2) ;
+        size_t h5 = hash<int>()(t.stripe_id);
+        size_t h6 = hash<int>()(t.disk_id);
+        return h1 ^ (h5 << 1) ^ (h6 << 2);
+    }
+};
+}
 #endif

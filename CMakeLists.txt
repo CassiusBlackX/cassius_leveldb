@@ -159,12 +159,24 @@ target_compile_definitions(benchmark_ycsb PRIVATE
 )
 target_link_libraries(benchmark_ycsb pthread)
 
+# stripe recorder
+add_executable(stripe_recorder ${CMAKE_CURRENT_SOURCE_DIR}/src/stripe_recorder.cpp ${YCSB_SOURCES} ${LEVELDB_SOURCES} ${UTILS_FILES})
+target_sources(stripe_recorder PRIVATE 
+    ${LEVELDB_ROOT_DIR}/util/ec/replicalog.cc
+)
+target_include_directories(stripe_recorder PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
+target_compile_definitions(stripe_recorder PRIVATE 
+    CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
+    STRIPE_RECORDER
+)
+target_link_libraries(stripe_recorder pthread isal)
+
 # basic_ycsb_demo
 add_executable(basic_ycsb_demo ${CMAKE_CURRENT_SOURCE_DIR}/src/basic_ycsb_demo.cpp ${YCSB_SOURCES} ${LEVELDB_SOURCES} ${UTILS_FILES})
 target_sources(basic_ycsb_demo PRIVATE 
-    ${LEVELDB_ROOT_DIR}/util/ec/ecdisk.cc
+    # ${LEVELDB_ROOT_DIR}/util/ec/ecdisk.cc
     # ${LEVELDB_ROOT_DIR}/util/ec/ecmeta.cc
-    ${LEVELDB_ROOT_DIR}/util/ec/ecstripe.cc
+    # ${LEVELDB_ROOT_DIR}/util/ec/ecstripe.cc
     ${LEVELDB_ROOT_DIR}/util/ec/replicalog.cc
 )
 target_include_directories(basic_ycsb_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)

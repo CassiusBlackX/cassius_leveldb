@@ -104,15 +104,23 @@ void LeveldbDB::Init() {
     GetOptions(props, &opt);
 
     // added by lzy .
-    const string log_path1 = "/home/user/SSD/disk10/data0";
-    const string log_path2 = "/home/user/SSD/disk10/data0";
+    // const string log_path1 = "/home/user/SSD/disk10/data0";
+    const string log_path1 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
+    const string log_path2 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
+    // const string log_path2 = "/home/user/SSD/disk10/data0";
 
-    const string ec_path0 = "/home/user/SSD/disk10/data0";
-    const string ec_path1 = "/home/user/SSD/disk11/data1";
-    const string ec_path2 = "/home/user/SSD/disk12/data2";
-    const string ec_path3 = "/home/user/SSD/disk13/data3";
-    const string ec_path4 = "/home/user/SSD/disk14/parity0";
-    const string ec_path5 = "/home/user/SSD/disk15/parity1";
+    // const string ec_path0 = "/home/user/SSD/disk10/data0";
+    // const string ec_path1 = "/home/user/SSD/disk11/data1";
+    // const string ec_path2 = "/home/user/SSD/disk12/data2";
+    // const string ec_path3 = "/home/user/SSD/disk13/data3";
+    // const string ec_path4 = "/home/user/SSD/disk14/parity0";
+    // const string ec_path5 = "/home/user/SSD/disk15/parity1";
+    const std::string ec_path0 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
+    const std::string ec_path1 = std::string(CMAKELISTS_PATH) + "/build/testdb/data1";
+    const std::string ec_path2 = std::string(CMAKELISTS_PATH) + "/build/testdb/data2";
+    const std::string ec_path3 = std::string(CMAKELISTS_PATH) + "/build/testdb/data3";
+    const std::string ec_path4 = std::string(CMAKELISTS_PATH) + "/build/testdb/parity0";
+    const std::string ec_path5 = std::string(CMAKELISTS_PATH) + "/build/testdb/parity1";
 
     const int replicaNum=2;
     const int ecNum = 6;

@@ -38,6 +38,11 @@
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 
+#ifdef STRIPE_RECORDER
+#include "zal_utils.h"
+extern zal_utils::ThreadSafeSet<zal_utils::table_info> table_info_set;
+#endif
+
 namespace leveldb {
 
 namespace {
@@ -307,10 +312,19 @@ class Repairer {
     // Copy data.
     Iterator* iter = NewTableIterator(t.meta);
     int counter = 0;
+    #ifdef STRIPE_RECORDER
+    InternalKey largest_key, smallest_key;
+    smallest_key.DecodeFrom(iter->key());
+    #endif
     for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
       builder->Add(iter->key(), iter->value());
       counter++;
     }
+    #ifdef STRIPE_RECORDER
+    if (!iter->key().empty()) {
+      largest_key.DecodeFrom(iter->key());
+    }
+    #endif
     delete iter;
 
     ArchiveFile(src);
@@ -321,6 +335,12 @@ class Repairer {
       if (s.ok()) {
         t.meta.file_size = builder->FileSize();
       }
+      #ifdef STRIPE_RECORDER
+      zal_utils::table_info tmp_table_info(t.meta.number, smallest_key.user_key().ToString(), largest_key.user_key().ToString(), t.meta.file_size);
+      if (!table_info_set.contains(tmp_table_info)) {
+        table_info_set.insert(tmp_table_info);
+      }
+      #endif
     }
     delete builder;
     builder = nullptr;

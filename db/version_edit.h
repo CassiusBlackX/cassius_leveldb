@@ -28,7 +28,7 @@ struct FileMetaData {
   //added by lzy to indicates who is the team leader when the file is merged to ec .
   uint64_t leader_number;
   uint64_t lognumber;
-  int ecnode;
+  int ecnode;  // the physical id of the disk where the file is stored.
 };
 
 class VersionEdit {

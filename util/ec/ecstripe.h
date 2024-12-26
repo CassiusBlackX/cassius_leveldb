@@ -1,7 +1,6 @@
-#ifndef LEVELDB_ECSTRIPE_H                                                                                                                                                                       
-#define LEVELDB_ECSTRIPE_H                                                                                                                                                                       
-#define UNUSED(x) (void)(x)                                                                                                                                                                               
-        
+#ifndef LEVELDB_ECSTRIPE_H
+#define LEVELDB_ECSTRIPE_H
+#define UNUSED(x) (void)(x)
 #include <fstream>
 #include <string>
 #include <vector>

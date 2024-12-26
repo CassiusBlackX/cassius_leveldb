@@ -145,7 +145,7 @@ Status DumpDescriptor(Env* env, const std::string& fname, WritableFile* dst) {
 }
 
 Status DumpTable(Env* env, const std::string& fname, WritableFile* dst) {
-  // added by lzy .
+  // added by  .
   int ec_m = config::ec_m;
   int ec_k = config::ec_k;
   int ec_p = config::ec_p;

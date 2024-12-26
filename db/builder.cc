@@ -15,6 +15,11 @@
 
 #include "include/leveldb/timer.h"
 
+#ifdef STRIPE_RECORDER
+#include "zal_utils.h"
+extern zal_utils::ThreadSafeSet<zal_utils::table_info> table_info_set;
+#endif
+
 namespace leveldb {
 
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
@@ -121,6 +126,12 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
 
   if (s.ok() && meta->file_size > 0) {
     // Keep it
+    #ifdef STRIPE_RECORDER
+    zal_utils::table_info build_table_info(meta->number, meta->smallest.user_key().ToString(), meta->largest.user_key().ToString(), meta->file_size);
+    if (!table_info_set.contains(build_table_info)) {
+      table_info_set.insert(build_table_info);
+    }
+    #endif
   } else {
     if(level<=config::maxlowlevel)
       env->RemoveFile(fname[0]);

@@ -22,6 +22,14 @@
 // added by lzy to do ec .
 #include "isa-l.h"
 
+#ifdef STRIPE_RECORDER
+#include "zal_utils.h"
+extern zal_utils::ThreadSafeSet<zal_utils::StripeRecorder> stripe_recorder_set;
+extern int global_stripe_index;
+extern std::mutex global_stripe_index_mutex;
+extern zal_utils::ThreadSafeSet<zal_utils::table_info> table_info_set;
+#endif
+
 namespace leveldb {
 
 static size_t TargetFileSize(const Options* options) {
@@ -613,21 +621,53 @@ int Version::LowLevelEc(int forced)
             buffer_size = filestoec[j]->file_size;
         }
         const char* forced_str = forced?"(Forced)":"";
-        Log(vset_->options_->info_log, "%sWe will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+        Log(vset_->options_->info_log, "%sWe will do ec for these files : %ld(%d->%d) %ld(%d->%d) %ld(%d->%d) %ld(%d->%d) %d files should be changed : %ld bytes ; ec : %d bytes\n",
          forced_str,
          filestoec[0]->number, filestoec[0]->ecnode, 0,
          filestoec[1]->number, filestoec[1]->ecnode, 1,
          filestoec[2]->number, filestoec[2]->ecnode, 2,
          filestoec[3]->number, filestoec[3]->ecnode, 3,
          changedfiles, changedbytes, buffer_size*ec_p);
+        #ifdef STRIPE_RECORDER
+        zal_utils::StripeRecorder stripe_recorder;
+        stripe_recorder.id = -1;  // -1 to indicate invalid
+        std::vector<zal_utils::table_info> tmp_tables;
+        #endif
         if(!forced)
         {
           for(int i=0;i<ec_k;i++)
           {
-            Log(vset_->options_->info_log, "SST %d has %lld bytes from %s to %s , its disk number is %d",
+            Log(vset_->options_->info_log, "SST %ld has %ld bytes from %s to %s , its disk number is %d",
                 filestoec[i]->number, filestoec[i]->file_size,
                 filestoec[i]->smallest.user_key().ToString().c_str(), filestoec[i]->largest.user_key().ToString().c_str(), filestoec[i]->ecnode);
+            #ifdef STRIPE_RECORDER
+            stripe_recorder.tables.push_back(filestoec[i]->number);
+            zal_utils::table_info tmp_table_info(filestoec[i]->number, filestoec[i]->smallest.user_key().ToString(), filestoec[i]->largest.user_key().ToString(), filestoec[i]->file_size);
+            if (!table_info_set.contains(tmp_table_info)) {
+              table_info_set.insert(tmp_table_info);
+            }
+            tmp_tables.push_back(tmp_table_info);
+            #endif
           }
+          #ifdef STRIPE_RECORDER
+          if (!stripe_recorder_set.contains(stripe_recorder)) {
+            // current stripe recorder is not in the set
+            global_stripe_index_mutex.lock();
+            stripe_recorder.id = global_stripe_index++;
+            global_stripe_index_mutex.unlock();
+            stripe_recorder_set.insert(stripe_recorder);
+            for (int i = 0; i < tmp_tables.size(); i++) {
+              if (table_info_set.contains(tmp_tables[i])) {
+                tmp_tables[i].stripe_id = stripe_recorder.id;
+                // set do not allow modify its element, 
+                // however, the way we cal table_info's hash would ignore difference in `stripe_id`
+                // therefore we can only erase the `tmp_tables[i]` and insert them again.
+                table_info_set.erase(tmp_tables[i]);
+                table_info_set.insert(tmp_tables[i]);
+              }
+            }
+          }
+          #endif
         }
 
         for(int i=0;i<ec_k;i++)
@@ -725,7 +765,7 @@ int Version::LowLevelEc(int forced)
       if(buffer_size < filestoec[j]->file_size)
         buffer_size = filestoec[j]->file_size;
     }
-    Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+    Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %ld bytes ; ec : %d bytes\n",
       log_content[0][0], log_content[0][1], 0,
       log_content[1][0], log_content[1][1], 1,
       log_content[2][0], log_content[2][1], 2,
