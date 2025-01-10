@@ -172,7 +172,7 @@ target_compile_definitions(stripe_recorder PRIVATE
 target_link_libraries(stripe_recorder pthread isal)
 
 # basic_ycsb_demo
-add_executable(basic_ycsb_demo ${CMAKE_CURRENT_SOURCE_DIR}/src/basic_ycsb_demo.cpp ${YCSB_SOURCES} ${LEVELDB_SOURCES} ${UTILS_FILES})
+add_executable(basic_ycsb_demo ${CMAKE_CURRENT_SOURCE_DIR}/src/basic_ycsb_demo.cpp ${YCSB_SOURCES} ${LEVELDB_SOURCES})
 target_sources(basic_ycsb_demo PRIVATE 
     # ${LEVELDB_ROOT_DIR}/util/ec/ecdisk.cc
     # ${LEVELDB_ROOT_DIR}/util/ec/ecmeta.cc

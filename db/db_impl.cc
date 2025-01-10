@@ -1170,6 +1170,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
             stripe[j]->smallest.user_key().ToString().c_str(), stripe[j]->largest.user_key().ToString().c_str(), stripe[j]->ecnode);
       */
     }
+    }
 
   assert(versions_->NumLevelFiles(compact->compaction->level()) > 0);
   assert(compact->builder == nullptr);
