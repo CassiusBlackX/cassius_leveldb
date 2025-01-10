@@ -79,10 +79,11 @@ int main() {
     ycsbc::utils::Properties props;
     props.SetProperty("doload", "true");
     props.SetProperty("dotransaction", "true");
-    props.SetProperty("threadcount", "1");
+    props.SetProperty("threadcount", "2");
     props.SetProperty("dbname", "leveldb");
     props.SetProperty("status", "true");
     props.SetProperty("sleepafterload", "0");
+    props.SetProperty("status.interval", "10");
 
     // workload
     const std::string& workload_name = std::string(CMAKELISTS_PATH) + "/ycsb/workloads/workload_ssd";

@@ -1,10 +1,10 @@
 # zal edit workload to test io on linux raid, used together with `properties/raid.properties`
 
 # data size: 2GB, initial load 1GB, transaction 1GB, 0.5GB update, 0.5GB insert
-recordcount=2097152 #old:16384 * 64
+recordcount=65536 #old:16384 * 64
 
 # BUG operationcount should be an unnecessary parameter, but when parsing parameter, it must be passed in, so a dummy value is passed in
-operationcount=2097152
+operationcount=262144
 readproportion=0
 updateproportion=0.5
 scanproportion=0

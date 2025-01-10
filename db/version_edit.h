@@ -29,6 +29,9 @@ struct FileMetaData {
   uint64_t leader_number;
   uint64_t lognumber;
   int ecnode;  // the physical id of the disk where the file is stored.
+
+  // added by zal, bool expired to indicate whether the file is expired but yet to be deleted
+  bool expired = false;
 };
 
 class VersionEdit {

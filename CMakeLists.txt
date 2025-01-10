@@ -168,6 +168,7 @@ target_include_directories(stripe_recorder PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/y
 target_compile_definitions(stripe_recorder PRIVATE 
     CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}"  # pass the path of
     STRIPE_RECORDER
+    EXPIRED_DELETE
 )
 target_link_libraries(stripe_recorder pthread isal)
 

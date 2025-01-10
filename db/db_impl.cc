@@ -299,6 +299,20 @@ void DBImpl::RemoveObsoleteFiles() {
           break;
         case kTableFile:
           keep = (live.find(number) != live.end());
+          #ifdef EXPIRED_DELETE
+          keep = true;
+          {
+            zal_utils::table_info tmp_table_info(number);
+            if (table_info_set.contains(tmp_table_info)) {
+              table_info_set.erase(tmp_table_info);
+              tmp_table_info.expired = true;
+              table_info_set.insert(tmp_table_info);
+            } else {
+              // BUG 为什么在会在还没有真正的ldb文件的时候，就走到这个位置
+              // std::cerr << "RemoveObsoleteFiles: table_info_set does not contain " << number << std::endl;
+            }
+          }
+          #endif
           break;
         case kTempFile:
           // Any temp files that are currently being written to must
@@ -1127,12 +1141,11 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
             stripe[j]->ecnode);
         #ifdef STRIPE_RECORDER
         stripe_recorder.tables.push_back(stripe[j]->number);
-        zal_utils::table_info tmp_table_info(stripe[j]->number, stripe[j]->ecnode, stripe[j]->file_size);
+        zal_utils::table_info tmp_table_info(stripe[j]->number, stripe[j]->file_size);
         if (!table_info_set.contains(tmp_table_info)) {
           table_info_set.insert(tmp_table_info);
         } else {
           zal_utils::table_info new_table_info = *(table_info_set.find(tmp_table_info));
-          new_table_info.disk_id = stripe[j]->ecnode;
           new_table_info.table_size = stripe[j]->file_size;
           if (new_table_info.table_size != -1 && new_table_info.table_size != stripe[j]->file_size) {
             std::cerr << "table " << stripe[j]->number << " size mismatch, in_set size:" << new_table_info.table_size << " vs stripe_recorded size: " << stripe[j]->file_size << std::endl;

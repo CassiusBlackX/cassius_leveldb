@@ -301,6 +301,17 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
   tmp.reserve(files_[0].size());
   for (uint32_t i = 0; i < files_[0].size(); i++) {
     FileMetaData* f = files_[0][i];
+    #ifdef EXPIRED_DELETE
+    zal_utils::table_info tmp_table_info(f->number, f->smallest.user_key().ToString(), f->largest.user_key().ToString(), f->file_size);
+    if (table_info_set.contains(tmp_table_info)) {
+      // if the file is ixpired, we should skip it. to leveldb, it is not exist.
+      if (table_info_set.find(tmp_table_info)->expired) {
+        continue;
+      }
+    } else {
+      std::cerr << "table_info_set does not contain " << f->number << std::endl;
+    }
+    #endif
     if (ucmp->Compare(user_key, f->smallest.user_key()) >= 0 &&
         ucmp->Compare(user_key, f->largest.user_key()) <= 0) {
       tmp.push_back(f);
@@ -324,6 +335,17 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
     uint32_t index = FindFile(vset_->icmp_, files_[level], internal_key);
     if (index < num_files) {
       FileMetaData* f = files_[level][index];
+      #ifdef EXPIRED_DELETE
+      zal_utils::table_info tmp_table_info(f->number, f->smallest.user_key().ToString(), f->largest.user_key().ToString(), f->file_size);
+      if (table_info_set.contains(tmp_table_info)) {
+        // if the file is ixpired, we should skip it. to leveldb, it is not exist.
+        if (table_info_set.find(tmp_table_info)->expired) {
+          continue;
+        }
+      } else {
+        std::cerr << "table_info_set does not contain " << f->number << std::endl;
+      }
+      #endif
       if (ucmp->Compare(user_key, f->smallest.user_key()) < 0) {
         // All of "f" is past any data for user_key
       } else {

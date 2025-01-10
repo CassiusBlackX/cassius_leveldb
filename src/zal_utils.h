@@ -211,15 +211,16 @@ struct table_info {
     int index;
     int level;
     int stripe_id;
-    int disk_id;
     std::string smallest_key;
     std::string largest_key;
     size_t table_size;
+    bool expired = false;
 
     table_info() = default;
-    table_info(int index, int level, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(level), smallest_key(smallest), largest_key(largest), table_size(size), stripe_id(-1), disk_id(-1) {}
-    table_info(int index, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(-1), smallest_key(smallest), largest_key(largest), table_size(size), stripe_id(-1), disk_id(-1) {}
-    table_info(int index, int disk_id, size_t size) : index(index), level(-1), stripe_id(-1), disk_id(disk_id), table_size(size) {}
+    table_info(int index) : index(index), level(-1), stripe_id(-1), table_size(-1), expired(false) {}
+    table_info(int index, size_t size) : index(index), level(-1), table_size(size), stripe_id(-1), expired(false) {}
+    table_info(int index, int level, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(level), smallest_key(smallest), largest_key(largest), table_size(size), stripe_id(-1), expired(false) {}
+    table_info(int index, const std::string& smallest, const std::string& largest, size_t size) : index(index), level(-1), smallest_key(smallest), largest_key(largest), table_size(size), stripe_id(-1), expired(false) {}
     table_info(const table_info& other) = default;
 
     table_info& operator=(const table_info& other) = default;
@@ -234,18 +235,21 @@ struct table_info {
             // && smallest_key == other.smallest_key
             // && largest_key == other.largest_key
             // && table_size == other.table_size
-            && stripe_id == other.stripe_id
-            && disk_id == other.disk_id
+            // && stripe_id == other.stripe_id
+            // && disk_id == other.disk_id
             ;
     }
 
     void print() const {
-        if (level == -1) {
-            std::cout << "table " << index << " range: " << smallest_key << " - " << largest_key << " size: " << table_size << std::endl;
-            return;
-        }
-        else {
-            std::cout << "table " << index << " level " << level << " range: " << smallest_key << " - " << largest_key << " size: " << table_size << std::endl;
+        // if (level == -1) {
+        //     std::cout << "table " << index << " range: " << smallest_key << " - " << largest_key << " size: " << table_size << std::endl;
+        //     return;
+        // }
+        // else {
+        //     std::cout << "table " << index << " level " << level << " range: " << smallest_key << " - " << largest_key << " size: " << table_size << std::endl;
+        // }
+        if (stripe_id != -1) {
+            std::cout << "table: " << index << " stripe: " << stripe_id << std::endl;
         }
     }
 };
@@ -285,6 +289,9 @@ struct StripeRecorder {
     StripeRecorder(int id) : id(id) {}
 
     bool operator==(const StripeRecorder& other) const {
+        if (this->id != other.id) {
+            return false;
+        }
         // as long as tables are the same, we think they are the same stripe
         for (int i = 0; i < this->tables.size() < other.tables.size() ? this->tables.size() : other.tables.size(); i++) {
             if (this->tables[i] != other.tables[i]) {
@@ -320,6 +327,7 @@ struct hash<zal_utils::StripeRecorder> {
         for (auto i : x.tables) {
             h ^= std::hash<int>()(i);
         }
+        h ^= std::hash<int>()(x.id);
         return h;
     }
 };
@@ -332,9 +340,8 @@ struct hash<zal_utils::table_info> {
         // std::size_t h3 = std::hash<std::string>()(t.largest_key);
         // std::size_t h4 = std::hash<size_t>()(t.table_size);
         // return h1 ^ (h2 << 1) ^ (h3 << 2) ;
-        size_t h5 = hash<int>()(t.stripe_id);
-        size_t h6 = hash<int>()(t.disk_id);
-        return h1 ^ (h5 << 1) ^ (h6 << 2);
+        // size_t h5 = hash<int>()(t.stripe_id);
+        return h1;
     }
 };
 }
