@@ -1113,7 +1113,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       versions_->current()->Findstripe(f->leader_number, stripe, &findnum); 
       if(f->leader_number)
       {
-        Log(options_.info_log, "Stripe %lld consists %d sst files",
+        Log(options_.info_log, "Stripe %ld consists %d sst files",
           f->leader_number, findnum);
       #ifdef STRIPE_RECORDER
       zal_utils::StripeRecorder stripe_recorder;

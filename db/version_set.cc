@@ -674,7 +674,7 @@ int Version::RestructEc(std::set<uint64_t> whichtoec, std::set<uint64_t> generat
       }
     }
     leadernumber_++;
-    Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+    Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %ld bytes ; ec : %ld bytes\n",
       log_content[0][0], log_content[0][1], 0,
       log_content[1][0], log_content[1][1], 1,
       log_content[2][0], log_content[2][1], 2,
@@ -716,7 +716,7 @@ int Version::RestructEc(std::set<uint64_t> whichtoec, std::set<uint64_t> generat
         filestoec[j]->leader_number = leadernumber_;
       }
       leadernumber_++;
-      Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+      Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %ld(%d->%d) %ld(%d->%d) %ld(%d->%d) %ld(%d->%d) %d files should be changed : %ld bytes ; ec : %ld bytes\n",
         filestoec[0]->number, 0, 0,
         filestoec[1]->number, 0, 1,
         filestoec[2]->number, 0, 2,
@@ -766,7 +766,7 @@ int Version::RestructEc(std::set<uint64_t> whichtoec, std::set<uint64_t> generat
         filestoec[j]->leader_number = leadernumber_;
       }
       leadernumber_++;
-      Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+      Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %ld bytes ; ec : %ld bytes\n",
         log_content[0][0], log_content[0][1], 0,
         log_content[1][0], log_content[1][1], 1,
         log_content[2][0], log_content[2][1], 2,
@@ -964,7 +964,7 @@ int Version::LowLevelEc(int forced)
       if(buffer_size < filestoec[j]->file_size)
         buffer_size = filestoec[j]->file_size;
     }
-    Log(vset_->options_->info_log, "(old)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+    Log(vset_->options_->info_log, "(old)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %ld bytes ; ec : %d bytes\n",
       log_content[0][0], log_content[0][1], 0,
       log_content[1][0], log_content[1][1], 1,
       log_content[2][0], log_content[2][1], 2,
