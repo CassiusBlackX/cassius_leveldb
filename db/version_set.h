@@ -119,10 +119,12 @@ class Version {
   int EcMark(std::set<uint64_t> whichtoec);
   int HighLevelEc(FileMetaData *f, Ecpath ecpath);
   int Findstripe(uint64_t leadernumber, FileMetaData* returnf[], int* findnum);
+  int RestructEc(std::set<uint64_t> whichtoec, std::set<uint64_t> generatedSST);
 
   // added by lzy to protect the table files from deletion because they have not been encoded .
   std::set<uint64_t> waitforec_;
   int ecnode_waiting[4] = {0,0,0,0};
+  int leadernumber_ = 2;
 
  private:
   friend class Compaction;

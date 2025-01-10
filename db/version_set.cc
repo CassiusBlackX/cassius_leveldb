@@ -578,6 +578,204 @@ std::string Version::DebugString() const {
   return r;
 }
 
+int Version::RestructEc(std::set<uint64_t> whichtoec, std::set<uint64_t> generatedSST)
+{
+  int ec_m = config::ec_m;
+  int ec_k = config::ec_k;
+  int ec_p = config::ec_p;
+
+  std::set<FileMetaData*> SST;
+  for (int level_tmp = 0; level_tmp <= config::maxlowlevel; level_tmp++)
+  {
+    for(size_t i=0;i<files_[level_tmp].size();i++)
+    {
+      FileMetaData* f = files_[level_tmp][i];
+      if(generatedSST.find(f->number) != generatedSST.end())
+        SST.insert(f);
+    }
+  }
+  
+  FileMetaData* filestoec[ec_k];
+  int used[ec_k];
+  uint64_t filesize;
+  for(auto it=whichtoec.begin();it!=whichtoec.end();it++)
+  {
+    for(int i=0;i<ec_k;i++)
+    {
+      used[i] = 0;
+    }
+    filesize = 0;
+    for (int level_tmp = 0; level_tmp <= config::maxlowlevel; level_tmp++)
+    {
+      for(size_t i=0;i<files_[level_tmp].size();i++)
+      {
+        FileMetaData* f = files_[level_tmp][i];
+        //printf(" %d : %d %d\n", f->number, f->leader_number, f->ecnode);
+        if(f->leader_number == *it)
+        {
+          used[f->ecnode] = 1;
+          if(f->file_size > filesize)
+            filesize = f->file_size;
+          filestoec[f->ecnode] = f;
+        }
+      }
+    }
+    if(filesize == 0)
+      continue;
+    for(int i=0;i<ec_k;i++)
+    {
+      if(used[i]==0)
+      {
+        FileMetaData* f;
+        uint64_t tmp_filesize = 0;
+        for(auto it=SST.begin();it!=SST.end();it++)
+        {
+          if((*it)->file_size <= filesize && (*it)->file_size > tmp_filesize)
+          {
+            f = *it;
+            tmp_filesize = f->file_size;
+          }
+        }
+        if(tmp_filesize != 0)
+        {
+          SST.erase(f);
+          filestoec[i] = f;
+          used[i] = 1;
+        }
+      }
+    }
+    int log_content[ec_k][2];
+    for(int j=0;j<ec_k;j++)
+    {
+      if(used[j] == 1)
+      {
+        log_content[j][0] = filestoec[j]->number;
+        log_content[j][1] = filestoec[j]->ecnode;
+      }
+      else
+      {
+        log_content[j][0] = 0;
+        log_content[j][1] = 0;
+      }
+    }
+    int changedfiles = 0;
+    uint64_t changedbytes = 0;
+    for(int j=0;j<ec_k;j++)
+    {
+      if(used[j] == 1)
+      {
+        if(filestoec[j]->ecnode != j)
+        {
+          changedfiles++;
+          changedbytes+=filestoec[j]->file_size;
+          filestoec[j]->ecnode = j;
+        }
+        filestoec[j]->leader_number = leadernumber_;
+      }
+    }
+    leadernumber_++;
+    Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+      log_content[0][0], log_content[0][1], 0,
+      log_content[1][0], log_content[1][1], 1,
+      log_content[2][0], log_content[2][1], 2,
+      log_content[3][0], log_content[3][1], 3,
+      changedfiles, changedbytes, filesize * ec_p);
+    //assert(*it < 10);
+  }
+  if(!SST.empty())
+  {
+    int SST_size = SST.size();
+    int SST_x = SST_size / ec_k;
+    int SST_b = SST_size % ec_k;
+    for(int i=0;i<SST_x;i++)
+    {
+      int j = 0;
+      filesize = 0;
+      for(auto it=SST.begin();it!=SST.end();it++)
+      {
+        FileMetaData* f = *it;
+        filestoec[j] = f;
+        j++;
+        if(f->file_size > filesize)
+          filesize = f->file_size;
+        if(j == ec_k)
+          break;
+      }
+      for(int k=0;k<ec_k;k++)
+        SST.erase(filestoec[k]);
+      int changedfiles = 0;
+      uint64_t changedbytes = 0;
+      for(int j=0;j<ec_k;j++)
+      {
+        if(filestoec[j]->ecnode != j)
+        {
+          changedfiles++;
+          changedbytes+=filestoec[j]->file_size;
+          filestoec[j]->ecnode = j;
+        }
+        filestoec[j]->leader_number = leadernumber_;
+      }
+      leadernumber_++;
+      Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+        filestoec[0]->number, 0, 0,
+        filestoec[1]->number, 0, 1,
+        filestoec[2]->number, 0, 2,
+        filestoec[3]->number, 0, 3,
+        changedfiles, changedbytes, filesize * ec_p);
+    }  
+    if(!SST.empty())
+    {
+      int j = 0;
+      filesize = 0;
+      for(auto it=SST.begin();it!=SST.end();it++)
+      {
+        FileMetaData* f = *it;
+        filestoec[j] = f;
+        j++;
+        if(f->file_size > filesize)
+          filesize = f->file_size;
+        if(j == SST_b)
+          break;
+      }
+      for(int k=0;k<SST_b;k++)
+        SST.erase(filestoec[k]);
+      int log_content[ec_k][2];
+      for(int j=0;j<ec_k;j++)
+      {
+        if(j < SST_b)
+        {
+          log_content[j][0] = filestoec[j]->number;
+          log_content[j][1] = filestoec[j]->ecnode;
+        }
+        else
+        {
+          log_content[j][0] = 0;
+          log_content[j][1] = 0;
+        }
+      }
+      int changedfiles = 0;
+      uint64_t changedbytes = 0;
+      for(int j=0;j<SST_b;j++)
+      {
+        if(filestoec[j]->ecnode != j)
+        {
+          changedfiles++;
+          changedbytes+=filestoec[j]->file_size;
+          filestoec[j]->ecnode = j;
+        }
+        filestoec[j]->leader_number = leadernumber_;
+      }
+      leadernumber_++;
+      Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
+        log_content[0][0], log_content[0][1], 0,
+        log_content[1][0], log_content[1][1], 1,
+        log_content[2][0], log_content[2][1], 2,
+        log_content[3][0], log_content[3][1], 3,
+        changedfiles, changedbytes, filesize * ec_p);
+    }
+  }
+}
+
 // added by lzy to realize low-level ec .
 int Version::LowLevelEc(int forced)
 {
@@ -675,8 +873,9 @@ int Version::LowLevelEc(int forced)
         
         for(int j=0;j<ec_k;j++)
         {
-          filestoec[j]->leader_number = filestoec[0]->number;
+          filestoec[j]->leader_number = leadernumber_;
         }
+        leadernumber_++;
         std::string fname[ec_m+1];
         for(int j=0;j<ec_k;j++)
           fname[j] = TableFileName(vset_->dbname_, filestoec[j]->number);
@@ -765,7 +964,7 @@ int Version::LowLevelEc(int forced)
       if(buffer_size < filestoec[j]->file_size)
         buffer_size = filestoec[j]->file_size;
     }
-    Log(vset_->options_->info_log, "(Forced)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %ld bytes ; ec : %d bytes\n",
+    Log(vset_->options_->info_log, "(old)We will do ec for these files : %d(%d->%d) %d(%d->%d) %d(%d->%d) %d(%d->%d) %d files should be changed : %lld bytes ; ec : %lld bytes\n",
       log_content[0][0], log_content[0][1], 0,
       log_content[1][0], log_content[1][1], 1,
       log_content[2][0], log_content[2][1], 2,
@@ -1175,6 +1374,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     Builder builder(this, current_);
     builder.Apply(edit);
     builder.SaveTo(v);
+    v->leadernumber_ = current_->leadernumber_; 
   }
   Finalize(v);
 

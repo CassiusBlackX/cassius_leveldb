@@ -1111,7 +1111,9 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
           f->number, compact->compaction->level()+ilevel, f->leader_number, f->ecnode,
           f->file_size, f->smallest.user_key().ToString().c_str(), f->largest.user_key().ToString().c_str());
       versions_->current()->Findstripe(f->leader_number, stripe, &findnum); 
-      Log(options_.info_log, "Stripe %ld consists %d sst files",
+      if(f->leader_number)
+      {
+        Log(options_.info_log, "Stripe %lld consists %d sst files",
           f->leader_number, findnum);
       #ifdef STRIPE_RECORDER
       zal_utils::StripeRecorder stripe_recorder;
@@ -1277,7 +1279,6 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
           compact->compaction->MaxOutputFileSize()) {
         status = FinishCompactionOutputFile(compact, input);
         if (!status.ok()) {
-          if (!status.ok()) printf("finishcom there\n");
           break;
         }
       }
@@ -1291,13 +1292,10 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   }
   if (status.ok() && compact->builder != nullptr) {
     status = FinishCompactionOutputFile(compact, input);
-    if (!status.ok()) printf("finish there\n");
   }
   if (status.ok()) {
     status = input->status();
-    if (!status.ok()) printf("input there\n");
   }
-  //if (!status.ok()) printf("delete there\n");
   delete input;
   input = nullptr;
 
@@ -1368,11 +1366,15 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
           std::string fname = ParityBlockFileName(ecpath_.getEcpath()[i+config::ec_k], *it, i);
           env_->RemoveFile(fname);
         }
-      versions_->current()->EcMark(whichtoec);
     }
     status = InstallCompactionResults(compact);
     // added by lzy .
-    versions_->current()->LowLevelEc(1);
+    std::set<uint64_t> generatedSST;
+    for(int i=0;i<compact->outputs.size();i++)
+    {
+      generatedSST.insert(compact->outputs[i].number);
+    }
+    versions_->current()->RestructEc(whichtoec, generatedSST);
   }
   if (!status.ok()) {
     RecordBackgroundError(status);
