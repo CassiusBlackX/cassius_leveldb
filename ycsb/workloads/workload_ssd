@@ -4,7 +4,7 @@
 recordcount=65536 #old:16384 * 64
 
 # BUG operationcount should be an unnecessary parameter, but when parsing parameter, it must be passed in, so a dummy value is passed in
-operationcount=262144
+operationcount=65536
 readproportion=0
 updateproportion=0.5
 scanproportion=0

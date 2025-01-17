@@ -179,6 +179,8 @@ int main() {
     measurements->Reset();
     std::this_thread::sleep_for(std::chrono::seconds(std::stoi(props.GetProperty("sleepafterload", "0"))));
 
+    std::cout << "after load, table_info_set size: " << table_info_set.size() << std::endl;
+
     // transaction phase
     if (do_transaction) {
         // initial ops per second, unlimited if <= 0
@@ -238,12 +240,15 @@ int main() {
         delete dbs[i];
     }
 
+    std::cout << "after transaction, table_info_set size: " << table_info_set.size() << std::endl;
+
     // handle info collected during runtime
     std::vector<zal_utils::table_info> tables_info;
     std::vector<zal_utils::StripeRecorder> stripe_recorders;
     for (const auto& table : table_info_set) {
         tables_info.push_back(table);
     }
+    std::cout << "size of tables_info: " << tables_info.size() << std::endl;
     for (const auto& stripe : stripe_recorder_set) {
         stripe_recorders.push_back(stripe);
     }
@@ -260,3 +265,44 @@ int main() {
     }
     return 0;
 }
+
+// done: 数据集. done stripe_id唯一, 延迟删除(不删除)
+
+/*
+stripe_info {
+    stripe_id: int
+    tables: [int table_id]
+    expired_count: int
+}
+
+table_info {
+    table_id: int
+    stripe_id: int
+    valid: bool
+}
+
+table_info_set: ()
+stripe_info_set: ()
+
+当一个table要被删除的时候(compaction之后), 不删除,只在table_info_set中把这个table标记为失效 -> O(1)
+现在还不能记录table对应的stripe_id, 只能遍历stripe_info_set,找到包含这个table的stripe,然后在stripe中把这个table标记为失效 -> O(n)
+否则可以立刻去stripe_info_set中找到这个table对应的stripe, 然后在stripe中把这个table标记为失效 -> O(1)
+如果stripe中失效table的数量超过阈值,就立刻删除这个stripe
+
+当在查询的时候,查找每一个表之前,在table_info_set中查找这个表是否失效,失效就立刻跳过 -> O(1)
+
+实际的删除stripe就是把失效的table删除,然后删除本条带对应的parity block, 然后在stripe_info_set中删除这个stripe
+
+
+
+BUG 现在在记录table的时候没有办法正确记录到table对应的stripe_id
+
+现在只能同时维护table_info_set和stripe_info_set
+
+在tableinfo中标记sst的失效位,然后在每次调用RemoveObsoleteFiles的时候,遍历table_info_set和stripe_info_set,判断是否要删除一个条带  -> O(n) 目前版本
+
+还有一个思路是在每次标记失效位之后就立刻更新stripe_info_set, 然后超过阈值就立刻调用删除stripe  -> 未实现
+
+在get方法中,查找table之前,进table_info_set检查该table的失效位 O(1)
+
+*/

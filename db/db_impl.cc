@@ -662,6 +662,7 @@ void DBImpl::CompactMemTable() {
     if(full)
     {
       versions_->current()->LowLevelEc(0);
+      // BUG 在这里也要更新table_info_set
     }
   }
 
@@ -1059,6 +1060,7 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
           (unsigned long long)current_bytes);
       #ifdef STRIPE_RECORDER
       zal_utils::table_info compacted_table_info(output_number, compact->compaction->level()+1, compact->current_output()->smallest.user_key().ToString(), compact->current_output()->largest.user_key().ToString(), current_bytes);
+      table_info_set.insert(compacted_table_info);
       #endif
     }
   }
@@ -1160,18 +1162,22 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       if (!stripe_recorder_set.contains(stripe_recorder)) {
         // current stripe recorder is not in the set
         global_stripe_index_mutex.lock();
-        stripe_recorder.id = global_stripe_index++;
+        stripe_recorder.id = f->leader_number;
         global_stripe_index_mutex.unlock();
         stripe_recorder_set.insert(stripe_recorder);
         for (int i = 0; i < tmp_tables.size(); i++) {
           if (table_info_set.contains(tmp_tables[i])) {
             tmp_tables[i].stripe_id = stripe_recorder.id;
-            // set do not allow modify its element, 
+            // `set` do not allow modify its element, 
             // however, the way we cal table_info's hash would ignore difference in `stripe_id`
             // therefore we can only erase the `tmp_tables[i]` and insert them again.
             // BUG this is potentially incorrect!
             table_info_set.erase(tmp_tables[i]);
             table_info_set.insert(tmp_tables[i]);
+          } else {
+            // BUG we should not reach here!
+            table_info_set.insert(tmp_tables[i]);
+            std::cerr << "DoCompactionWork: we should not reach here!" << std::endl;
           }
         }
       }

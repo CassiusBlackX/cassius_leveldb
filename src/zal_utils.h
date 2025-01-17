@@ -250,6 +250,8 @@ struct table_info {
         // }
         if (stripe_id != -1) {
             std::cout << "table: " << index << " stripe: " << stripe_id << std::endl;
+        } else {
+            std::cout << "table: " << index << " failed to find stripe" << std::endl;
         }
     }
 };
