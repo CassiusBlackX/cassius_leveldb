@@ -148,6 +148,9 @@ struct LEVELDB_EXPORT Options {
 
   // added by lzy .
   int level = 0;
+
+  // added by zal, delete_threshold for stripeRecorder
+  unsigned delete_threshold = 3;
 };
 
 // Options that control read operations

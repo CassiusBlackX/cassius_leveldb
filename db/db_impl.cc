@@ -167,7 +167,8 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname, ReplicaLog
       background_compaction_scheduled_(false),
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
-                               &internal_comparator_)) 
+                               &internal_comparator_)), 
+      stripeRecorder_(options_.delete_threshold)
       {
 	logfile_backup.resize(replicaLog.getReplicaNum());
         log_backup.resize(replicaLog.getReplicaNum());
@@ -1994,7 +1995,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr, R
     *dbptr = impl;
   } else {
     delete impl;
-  }
+  }  
   return s;
 }
 

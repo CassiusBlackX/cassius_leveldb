@@ -18,6 +18,9 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
+// added by zal, for stripe recorder
+#include "util/ec/stripe_recorder.h"
+
 #include "include/leveldb/replicalog.h"
 
 namespace leveldb {
@@ -174,6 +177,9 @@ class DBImpl : public DB {
 
   // added by lzy .
   Ecpath ecpath_;
+
+  // added by zal
+  StripeRecorder stripeRecorder_;
 
   // table_cache_ provides its own synchronization
   TableCache* const table_cache_;
