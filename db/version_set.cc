@@ -424,8 +424,8 @@ Status Version::Get(ReadOptions& options, const LookupKey& k,
   state.saver.user_key = k.user_key();
   state.saver.value = value;
 
-  ForEachOverlapping(state.saver.user_key, state.ikey, &state, &State::Match, [&stripe_recorder](int table_id) {
-                             return stripe_recorder.LookUpTable(table_id);
+  ForEachOverlapping(state.saver.user_key, state.ikey, &state, &State::Match, [&stripeRecorder](int table_id) {
+                             return stripeRecorder.LookUpTable(table_id);
                            });
 
   return state.found ? state.s : Status::NotFound(Slice());
