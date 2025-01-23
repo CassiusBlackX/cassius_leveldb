@@ -23,6 +23,7 @@
 #include "db/version_edit.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
+#include "util/ec/stripe_recorder.h"
 
 namespace leveldb {
 

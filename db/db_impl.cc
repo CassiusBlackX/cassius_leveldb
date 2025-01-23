@@ -870,7 +870,7 @@ void DBImpl::BackgroundCompaction() {
       assert(status.ok());
       file[0]->size_ = f->file_size;
       table_cache_->RafileChanger(f->number, file, c->level());
-      versions_->current()->LowLevelEc(!whichtoec.empty());
+      versions_->current()->LowLevelEc(!whichtoec.empty(), this->stripeRecorder_);
     }
 
     if (!status.ok()) {
