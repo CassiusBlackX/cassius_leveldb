@@ -87,7 +87,7 @@ class Version {
   // Samples are taken approximately once every config::kReadBytesPeriod
   // bytes.  Returns true if a new compaction may need to be triggered.
   // REQUIRES: lock is held
-  bool RecordReadSample(Slice key
+  bool RecordReadSample(Slice key,
     StripeRecorder& stripeRecorder  // added by zal
   );
 

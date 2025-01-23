@@ -179,6 +179,7 @@ target_sources(basic_ycsb_demo PRIVATE
     # ${LEVELDB_ROOT_DIR}/util/ec/ecmeta.cc
     # ${LEVELDB_ROOT_DIR}/util/ec/ecstripe.cc
     ${LEVELDB_ROOT_DIR}/util/ec/replicalog.cc
+    ${LEVELDB_ROOT_DIR}/util/ec/stripe_recorder.cc
 )
 target_include_directories(basic_ycsb_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ycsb)
 target_compile_definitions(basic_ycsb_demo PRIVATE 
