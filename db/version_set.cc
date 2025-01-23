@@ -295,7 +295,7 @@ static bool NewestFirst(FileMetaData* a, FileMetaData* b) {
 void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                                  bool (*func)(void*, int, FileMetaData*), 
                                  // added by zal to filter out expired sst
-                                 bool (*filter)(int table_id)
+                                 std::function<bool(int)> filter
                                  ) {
   const Comparator* ucmp = vset_->icmp_.user_comparator();
 
@@ -444,7 +444,9 @@ bool Version::UpdateStats(const GetStats& stats) {
   return false;
 }
 
-bool Version::RecordReadSample(Slice internal_key) {
+bool Version::RecordReadSample(Slice internal_key,
+                                StripeRecorder& stripeRecorder  // added by zal
+) {
   ParsedInternalKey ikey;
   if (!ParseInternalKey(internal_key, &ikey)) {
     return false;
@@ -469,7 +471,9 @@ bool Version::RecordReadSample(Slice internal_key) {
 
   State state;
   state.matches = 0;
-  ForEachOverlapping(ikey.user_key, internal_key, &state, &State::Match);
+  ForEachOverlapping(ikey.user_key, internal_key, &state, &State::Match, [&stripeRecorder](int table_id) {
+                         return stripeRecorder.LookUpTable(table_id);
+                       });
 
   // Must have at least two matches since we want to merge across
   // files. But what if we have a single file that contains many

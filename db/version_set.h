@@ -87,7 +87,9 @@ class Version {
   // Samples are taken approximately once every config::kReadBytesPeriod
   // bytes.  Returns true if a new compaction may need to be triggered.
   // REQUIRES: lock is held
-  bool RecordReadSample(Slice key);
+  bool RecordReadSample(Slice key
+    StripeRecorder& stripeRecorder  // added by zal
+  );
 
   // Reference count management (so Versions do not disappear out from
   // under live iterators)
@@ -159,7 +161,7 @@ class Version {
   // REQUIRES: user portion of internal_key == user_key.
   void ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                           bool (*func)(void*, int, FileMetaData*),
-                          bool (*filter)(int table_id)  // added by zal
+                          std::function<bool(int)> filter // added by zal
                           );
 
   VersionSet* vset_;  // VersionSet to which this Version belongs

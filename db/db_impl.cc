@@ -1523,7 +1523,7 @@ Iterator* DBImpl::NewIterator(const ReadOptions& options) {
 
 void DBImpl::RecordReadSample(Slice key) {
   MutexLock l(&mutex_);
-  if (versions_->current()->RecordReadSample(key)) {
+  if (versions_->current()->RecordReadSample(key, stripeRecorder_)) {
     MaybeScheduleCompaction();
   }
 }
