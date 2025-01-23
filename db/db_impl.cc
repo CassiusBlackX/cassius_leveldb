@@ -4,6 +4,16 @@
 
 #include "db/db_impl.h"
 
+#include "db/builder.h"
+#include "db/db_iter.h"
+#include "db/dbformat.h"
+#include "db/filename.h"
+#include "db/log_reader.h"
+#include "db/log_writer.h"
+#include "db/memtable.h"
+#include "db/table_cache.h"
+#include "db/version_set.h"
+#include "db/write_batch_internal.h"
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
@@ -16,21 +26,12 @@
 #include <string>
 #include <vector>
 
-#include "db/builder.h"
-#include "db/db_iter.h"
-#include "db/dbformat.h"
-#include "db/filename.h"
-#include "db/log_reader.h"
-#include "db/log_writer.h"
-#include "db/memtable.h"
-#include "db/table_cache.h"
-#include "db/version_set.h"
-#include "db/write_batch_internal.h"
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/status.h"
 #include "leveldb/table.h"
 #include "leveldb/table_builder.h"
+
 #include "port/port.h"
 #include "table/block.h"
 #include "table/merger.h"
@@ -140,7 +141,8 @@ static int TableCacheSize(const Options& sanitized_options) {
   return sanitized_options.max_open_files - kNumNonTableCacheFiles;
 }
 
-DBImpl::DBImpl(const Options& raw_options, const std::string& dbname, ReplicaLog& replicaLog, Ecpath& ecpath)
+DBImpl::DBImpl(const Options& raw_options, const std::string& dbname,
+               ReplicaLog& replicaLog, Ecpath& ecpath)
     : env_(raw_options.env),
       internal_comparator_(raw_options.comparator),
       internal_filter_policy_(raw_options.filter_policy),
@@ -149,7 +151,8 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname, ReplicaLog
       owns_info_log_(options_.info_log != raw_options.info_log),
       owns_cache_(options_.block_cache != raw_options.block_cache),
       dbname_(dbname),
-      table_cache_(new TableCache(dbname_, options_, TableCacheSize(options_), ecpath)),
+      table_cache_(
+          new TableCache(dbname_, options_, TableCacheSize(options_), ecpath)),
       db_lock_(nullptr),
       shutting_down_(false),
       background_work_finished_signal_(&mutex_),
@@ -167,12 +170,11 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname, ReplicaLog
       background_compaction_scheduled_(false),
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
-                               &internal_comparator_)), 
-      stripeRecorder_(options_.delete_threshold)
-      {
-	logfile_backup.resize(replicaLog.getReplicaNum());
-        log_backup.resize(replicaLog.getReplicaNum());
-      }
+                               &internal_comparator_)),
+      stripeRecorder_(options_.delete_threshold) {
+  logfile_backup.resize(replicaLog.getReplicaNum());
+  log_backup.resize(replicaLog.getReplicaNum());
+}
 
 DBImpl::~DBImpl() {
   // Wait for background work to finish.
@@ -283,16 +285,19 @@ void DBImpl::RemoveObsoleteFiles() {
       switch (type) {
         case kLogFile:
           keep = ((number >= versions_->LogNumber()) ||
-                  (number == versions_->PrevLogNumber()) || live_log.find(number) != live_log.end());
-          //add by WL
-          if(!keep){
-            for(int i=0;i<replicaLog_.getReplicaNum();i++){
-                replica_logfile = LogFileName(replicaLog_.getLogReplicaPaths()[i], number);
-                env_->RemoveFile(replica_logfile);
-                //printf("=====db_impl.cc 300 backup path is %s ======\n", replicaLog_.getLogReplicaPaths()[i].c_str());
+                  (number == versions_->PrevLogNumber()) ||
+                  live_log.find(number) != live_log.end());
+          // add by WL
+          if (!keep) {
+            for (int i = 0; i < replicaLog_.getReplicaNum(); i++) {
+              replica_logfile =
+                  LogFileName(replicaLog_.getLogReplicaPaths()[i], number);
+              env_->RemoveFile(replica_logfile);
+              // printf("=====db_impl.cc 300 backup path is %s ======\n",
+              // replicaLog_.getLogReplicaPaths()[i].c_str());
             }
           }
-	  break;
+          break;
         case kDescriptorFile:
           // Keep my manifest file, and any newer incarnations'
           // (in case there is a race that allows other incarnations)
@@ -300,20 +305,6 @@ void DBImpl::RemoveObsoleteFiles() {
           break;
         case kTableFile:
           keep = (live.find(number) != live.end());
-          #ifdef EXPIRED_DELETE
-          keep = true;
-          {
-            zal_utils::table_info tmp_table_info(number);
-            if (table_info_set.contains(tmp_table_info)) {
-              table_info_set.erase(tmp_table_info);
-              tmp_table_info.expired = true;
-              table_info_set.insert(tmp_table_info);
-            } else {
-              // BUG 为什么在会在还没有真正的ldb文件的时候，就走到这个位置
-              // std::cerr << "RemoveObsoleteFiles: table_info_set does not contain " << number << std::endl;
-            }
-          }
-          #endif
           break;
         case kTempFile:
           // Any temp files that are currently being written to must
@@ -346,6 +337,13 @@ void DBImpl::RemoveObsoleteFiles() {
     env_->RemoveFile(dbname_ + "/" + filename);
   }
   mutex_.Lock();
+
+  // added by zal to delete all expired sst
+  std::vector<std::string> files_names;
+  stripeRecorder_.DeleteTable(files_names, dbname_);
+  for (const std::string& filename : files_names) {
+    env_->RemoveFile(filename);
+  }
 }
 
 Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
@@ -401,7 +399,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     return s;
   }
   std::set<uint64_t> expected;
-  versions_->AddLiveFiles(&expected);   
+  versions_->AddLiveFiles(&expected);
   uint64_t number;
   FileType type;
   std::vector<uint64_t> logs;
@@ -532,9 +530,9 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       Log(options_.info_log, "Reusing old log %s \n", fname.c_str());
       log_ = new log::Writer(logfile_, lfile_size);
       // LogReplica
-      //log_backOne = new log::Writer(logfile_backOne, lfile_size);
-      //log_backTwo = new log::Writer(logfile_backTwo, lfile_size);
-      for(int i=0;i<replicaLog_.getReplicaNum();i++){
+      // log_backOne = new log::Writer(logfile_backOne, lfile_size);
+      // log_backTwo = new log::Writer(logfile_backTwo, lfile_size);
+      for (int i = 0; i < replicaLog_.getReplicaNum(); i++) {
         log_backup[i] = new log::Writer(logfile_backup[i], lfile_size);
       }
       logfile_number_ = log_number;
@@ -566,8 +564,8 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     printf(
         "================WL::db_impl.cc 520 "
         "DBImpl::WriteLevel0Table==================\n");
-  //Timer timer("DBImpl::WriteLevel0Table");
-  //std::cout<<"-----come here-----DBImpl::WriteLevel0Table-------"<<std::endl;
+  // Timer timer("DBImpl::WriteLevel0Table");
+  // std::cout<<"-----come here-----DBImpl::WriteLevel0Table-------"<<std::endl;
   mutex_.AssertHeld();
   const uint64_t start_micros = env_->NowMicros();
   FileMetaData meta;
@@ -576,10 +574,8 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   // added by lzy to inilize meta->leader_number .
   meta.leader_number = 0;
   meta.lognumber = mem->lognumber;
-  for(int i=0;i<4;i++)
-  {
-    if(base->ecnode_waiting[i] == 0)
-    {
+  for (int i = 0; i < 4; i++) {
+    if (base->ecnode_waiting[i] == 0) {
       meta.ecnode = i;
       base->ecnode_waiting[i]++;
       break;
@@ -613,10 +609,11 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     if (base != nullptr) {
       level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
       // should change .
-      //level = 0;
+      // level = 0;
     }
     edit->AddFile(level, meta.number, meta.file_size, meta.smallest,
-                  meta.largest, meta.leader_number, meta.lognumber, meta.ecnode);
+                  meta.largest, meta.leader_number, meta.lognumber,
+                  meta.ecnode);
   }
 
   CompactionStats stats;
@@ -631,7 +628,7 @@ void DBImpl::CompactMemTable() {
     printf(
         "================WL::db_impl.cc 566 "
         "DBImpl::CompactMemTable()==================\n");
-  //Timer timer("DBImpl::CompactMemTable");
+  // Timer timer("DBImpl::CompactMemTable");
   mutex_.AssertHeld();
   assert(imm_ != nullptr);
 
@@ -653,17 +650,15 @@ void DBImpl::CompactMemTable() {
     s = versions_->LogAndApply(&edit, &mutex_);
 
     int full = 1;
-    for(int i=0;i<4;i++)
-    {
+    for (int i = 0; i < 4; i++) {
       full = full && versions_->current()->ecnode_waiting[i];
     }
-    if(full)
-      for(int i=0;i<config::ec_k;i++)
+    if (full)
+      for (int i = 0; i < config::ec_k; i++)
         versions_->current()->ecnode_waiting[i]--;
-    if(full)
-    {
-      versions_->current()->LowLevelEc(0);
-      // BUG 在这里也要更新table_info_set
+    if (full) {
+      versions_->current()->LowLevelEc(0, this->stripeRecorder_);
+      // FIXME 在这里也更新了StripeRecorder
     }
   }
 
@@ -763,7 +758,7 @@ void DBImpl::MaybeScheduleCompaction() {
     printf(
         "================WL::db_impl.cc 680 "
         "DBImpl::MaybeScheduleCompaction()===================\n");
-  //Timer timer("DBImpl::MaybeScheduleCompaction");
+  // Timer timer("DBImpl::MaybeScheduleCompaction");
   mutex_.AssertHeld();
   if (background_compaction_scheduled_) {
     // Already scheduled
@@ -808,7 +803,7 @@ void DBImpl::BackgroundCompaction() {
     printf(
         "================WL::db_impl.cc 723 "
         "DBImpl::BackgroundCompaction()==================\n");
-  //Timer timer("DBImpl::BackgroundCompaction");
+  // Timer timer("DBImpl::BackgroundCompaction");
   mutex_.AssertHeld();
 
   if (imm_ != nullptr) {
@@ -846,14 +841,12 @@ void DBImpl::BackgroundCompaction() {
     // added by lzy .
     int ec_m = config::ec_m;
     uint64_t leader_number;
-    std::set <uint64_t> whichtoec;
-    if(c->level()==config::maxlowlevel)
-    {
+    std::set<uint64_t> whichtoec;
+    if (c->level() == config::maxlowlevel) {
       leader_number = f->leader_number;
-      if(f->lognumber != 0)
+      if (f->lognumber != 0)
         versions_->current()->waitforec_.erase(f->lognumber);
-      if(leader_number)
-      {
+      if (leader_number) {
         whichtoec.insert(leader_number);
         versions_->current()->EcMark(whichtoec);
       }
@@ -865,15 +858,14 @@ void DBImpl::BackgroundCompaction() {
     status = versions_->LogAndApply(c->edit(), &mutex_);
 
     // added by lzy .
-    if(c->level()==config::maxlowlevel)
-    {
+    if (c->level() == config::maxlowlevel) {
       versions_->current()->HighLevelEc(f, ecpath_);
-      RandomAccessFile** file = (RandomAccessFile **)malloc(sizeof(RandomAccessFile *) * ec_m);
+      RandomAccessFile** file =
+          (RandomAccessFile**)malloc(sizeof(RandomAccessFile*) * ec_m);
       std::string fname[ec_m];
-      for(int i=0;i<config::ec_m;i++)
-      {
+      for (int i = 0; i < config::ec_m; i++) {
         fname[i] = ParityBlockFileName(ecpath_.getEcpath()[i], f->number, i);
-        status = env_->NewRandomAccessFile(fname[i], &file[i]); 
+        status = env_->NewRandomAccessFile(fname[i], &file[i]);
       }
       assert(status.ok());
       file[0]->size_ = f->file_size;
@@ -932,13 +924,13 @@ void DBImpl::CleanupCompaction(CompactionState* compact) {
     delete compact->builder;
   } else {
     assert(compact->outfile == nullptr);
-  }/*
-  for(int i=0;i<ec_m;i++)
-  {
-    delete compact->outfile[i];
-    compact->outfile[i] = nullptr;
-  }
-  free(compact->outfile);*/
+  } /*
+   for(int i=0;i<ec_m;i++)
+   {
+     delete compact->outfile[i];
+     compact->outfile[i] = nullptr;
+   }
+   free(compact->outfile);*/
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     const CompactionState::Output& out = compact->outputs[i];
     pending_outputs_.erase(out.number);
@@ -969,24 +961,21 @@ Status DBImpl::OpenCompactionOutputFile(CompactionState* compact) {
   // Make the output file
   std::string fname[ec_m];
   Status s;
-  WritableFile** file = (WritableFile **)malloc(sizeof(WritableFile *) * ec_m);
-  if(compact->compaction->level()+1<=config::maxlowlevel)
-  {
+  WritableFile** file = (WritableFile**)malloc(sizeof(WritableFile*) * ec_m);
+  if (compact->compaction->level() + 1 <= config::maxlowlevel) {
     fname[0] = TableFileName(dbname_, file_number);
     s = env_->NewWritableFile(fname[0], &file[0]);
-  }
-  else
-    for(int i=0;i<ec_m;i++)
-    {
+  } else
+    for (int i = 0; i < ec_m; i++) {
       fname[i] = ParityBlockFileName(ecpath_.getEcpath()[i], file_number, i);
-      s = env_->NewWritableFile(fname[i], &file[i]); 
+      s = env_->NewWritableFile(fname[i], &file[i]);
     }
   compact->outfile = file;
   if (!s.ok()) {
     return s;
   }
   if (s.ok()) {
-    options_.level = compact->compaction->level()+1;
+    options_.level = compact->compaction->level() + 1;
     compact->builder = new TableBuilder(options_, compact->outfile);
   }
   return s;
@@ -1007,8 +996,9 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   if (s.ok()) {
     s = compact->builder->Finish();
   } else {
-    if (!s.ok()) //printf("builderfinish there%d\n",compact->compaction->input(1,0)->number);
-    compact->builder->Abandon();
+    if (!s.ok())  // printf("builderfinish
+                  // there%d\n",compact->compaction->input(1,0)->number);
+      compact->builder->Abandon();
   }
   const uint64_t current_bytes = compact->builder->FileSize();
   compact->current_output()->file_size = current_bytes;
@@ -1022,18 +1012,16 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   int ec_p = config::ec_p;
   // Finish and check for file errors
   if (s.ok()) {
-    if(compact->compaction->level()+1<=config::maxlowlevel)
+    if (compact->compaction->level() + 1 <= config::maxlowlevel)
       s = compact->outfile[0]->Sync();
     else
-      for(int i=0;i<ec_m;i++)
-        s = compact->outfile[i]->Sync();
+      for (int i = 0; i < ec_m; i++) s = compact->outfile[i]->Sync();
   }
   if (s.ok()) {
-    if(compact->compaction->level()+1<=config::maxlowlevel)
+    if (compact->compaction->level() + 1 <= config::maxlowlevel)
       s = compact->outfile[0]->Close();
     else
-      for(int i=0;i<ec_m;i++)
-        s = compact->outfile[i]->Close();
+      for (int i = 0; i < ec_m; i++) s = compact->outfile[i]->Close();
   }
   delete compact->outfile;
   compact->outfile = nullptr;
@@ -1041,9 +1029,9 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   if (s.ok() && current_entries > 0) {
     // Verify that the table is usable
     leveldb::ReadOptions opt = ReadOptions();
-    opt.level = compact->compaction->level()+1;
-    Iterator* iter =
-        table_cache_->NewIterator(opt, output_number, current_bytes, compact->compaction->level()+1);
+    opt.level = compact->compaction->level() + 1;
+    Iterator* iter = table_cache_->NewIterator(
+        opt, output_number, current_bytes, compact->compaction->level() + 1);
     s = iter->status();
     delete iter;
     if (s.ok()) {
@@ -1053,16 +1041,21 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
           (unsigned long long)current_entries,
           (unsigned long long)current_bytes);
       */
-      Log(options_.info_log, "Generated table #%llu@%d: %lld keys from %s to %s, %lld bytes",
-          (unsigned long long)output_number, compact->compaction->level()+1,
+      Log(options_.info_log,
+          "Generated table #%llu@%d: %lld keys from %s to %s, %lld bytes",
+          (unsigned long long)output_number, compact->compaction->level() + 1,
           (unsigned long long)current_entries,
           compact->current_output()->smallest.user_key().ToString().c_str(),
           compact->current_output()->largest.user_key().ToString().c_str(),
           (unsigned long long)current_bytes);
-      #ifdef STRIPE_RECORDER
-      zal_utils::table_info compacted_table_info(output_number, compact->compaction->level()+1, compact->current_output()->smallest.user_key().ToString(), compact->current_output()->largest.user_key().ToString(), current_bytes);
+#ifdef STRIPE_RECORDER
+      zal_utils::table_info compacted_table_info(
+          output_number, compact->compaction->level() + 1,
+          compact->current_output()->smallest.user_key().ToString(),
+          compact->current_output()->largest.user_key().ToString(),
+          current_bytes);
       table_info_set.insert(compacted_table_info);
-      #endif
+#endif
     }
   }
   return s;
@@ -1081,7 +1074,7 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     const CompactionState::Output& out = compact->outputs[i];
     compact->compaction->edit()->AddFile(level + 1, out.number, out.file_size,
-                                         out.smallest, out.largest,1,0,0);
+                                         out.smallest, out.largest, 1, 0, 0);
   }
   return versions_->LogAndApply(compact->compaction->edit(), &mutex_);
 }
@@ -1091,27 +1084,21 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   int64_t imm_micros = 0;  // Micros spent doing imm_ compactions
 
   std::string result0 = "[";
-  for(int i=0;i<compact->compaction->num_input_files(0);i++)
-  {
-    result0 += std::to_string(compact->compaction->input(0,i)->number);
-    if(i != compact->compaction->num_input_files(0)-1)
-      result0 += " ";
+  for (int i = 0; i < compact->compaction->num_input_files(0); i++) {
+    result0 += std::to_string(compact->compaction->input(0, i)->number);
+    if (i != compact->compaction->num_input_files(0) - 1) result0 += " ";
   }
   result0 += "]";
   std::string result1 = "[";
-  for(int i=0;i<compact->compaction->num_input_files(1);i++)
-  {
-    result1 += std::to_string(compact->compaction->input(1,i)->number);
-    if(i != compact->compaction->num_input_files(1)-1)
-      result1 += " ";
+  for (int i = 0; i < compact->compaction->num_input_files(1); i++) {
+    result1 += std::to_string(compact->compaction->input(1, i)->number);
+    if (i != compact->compaction->num_input_files(1) - 1) result1 += " ";
   }
   result1 += "]";
   Log(options_.info_log, "Compacting %d@%d + %d@%d files : %s + %s",
       compact->compaction->num_input_files(0), compact->compaction->level(),
-      compact->compaction->num_input_files(1),
-      compact->compaction->level() + 1,
-      result0.c_str(),
-      result1.c_str());
+      compact->compaction->num_input_files(1), compact->compaction->level() + 1,
+      result0.c_str(), result1.c_str());
   /*
   Log(options_.info_log, "Compacting %d@%d + %d@%d files",
       compact->compaction->num_input_files(0), compact->compaction->level(),
@@ -1120,76 +1107,87 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   */
   FileMetaData* stripe[config::ec_k];
   int findnum;
-  for(int ilevel=0;ilevel<2;ilevel++)
-    for(int i=0;i<compact->compaction->num_input_files(ilevel);i++)
-    {
-      FileMetaData* f = compact->compaction->input(ilevel,i);
-      Log(options_.info_log, "Inputfile %ld@%d belongs to stripe %lu , its disk number is %d , it has %ld bytes from %s to %s",
-          f->number, compact->compaction->level()+ilevel, f->leader_number, f->ecnode,
-          f->file_size, f->smallest.user_key().ToString().c_str(), f->largest.user_key().ToString().c_str());
-      versions_->current()->Findstripe(f->leader_number, stripe, &findnum); 
-      if(f->leader_number)
-      {
+  for (int ilevel = 0; ilevel < 2; ilevel++)
+    for (int i = 0; i < compact->compaction->num_input_files(ilevel); i++) {
+      FileMetaData* f = compact->compaction->input(ilevel, i);
+      Log(options_.info_log,
+          "Inputfile %ld@%d belongs to stripe %lu , its disk number is %d , it "
+          "has %ld bytes from %s to %s",
+          f->number, compact->compaction->level() + ilevel, f->leader_number,
+          f->ecnode, f->file_size, f->smallest.user_key().ToString().c_str(),
+          f->largest.user_key().ToString().c_str());
+      versions_->current()->Findstripe(f->leader_number, stripe, &findnum);
+      if (f->leader_number) {
         Log(options_.info_log, "Stripe %ld consists %d sst files",
-          f->leader_number, findnum);
-      #ifdef STRIPE_RECORDER
-      zal_utils::StripeRecorder stripe_recorder;
-      stripe_recorder.id = -1;  // -1 to indicate invalid
-      std::vector<zal_utils::table_info> tmp_tables;
-      #endif
-      for(int j=0;j<findnum;j++)
-      {
-        Log(options_.info_log, "SST %ld has %ld bytes , its disk number is %d",
-            stripe[j]->number, stripe[j]->file_size,
-            stripe[j]->ecnode);
-        #ifdef STRIPE_RECORDER
-        stripe_recorder.tables.push_back(stripe[j]->number);
-        zal_utils::table_info tmp_table_info(stripe[j]->number, stripe[j]->file_size);
-        if (!table_info_set.contains(tmp_table_info)) {
-          table_info_set.insert(tmp_table_info);
-        } else {
-          zal_utils::table_info new_table_info = *(table_info_set.find(tmp_table_info));
-          new_table_info.table_size = stripe[j]->file_size;
-          if (new_table_info.table_size != -1 && new_table_info.table_size != stripe[j]->file_size) {
-            std::cerr << "table " << stripe[j]->number << " size mismatch, in_set size:" << new_table_info.table_size << " vs stripe_recorded size: " << stripe[j]->file_size << std::endl;
-          }
-          table_info_set.erase(tmp_table_info);
-          table_info_set.insert(new_table_info);
-        }
-        tmp_tables.push_back(tmp_table_info);
-        #endif
-      }
-      #ifdef STRIPE_RECORDER
-      if (!stripe_recorder_set.contains(stripe_recorder)) {
-        // current stripe recorder is not in the set
-        global_stripe_index_mutex.lock();
-        stripe_recorder.id = f->leader_number;
-        global_stripe_index_mutex.unlock();
-        stripe_recorder_set.insert(stripe_recorder);
-        for (int i = 0; i < tmp_tables.size(); i++) {
-          if (table_info_set.contains(tmp_tables[i])) {
-            tmp_tables[i].stripe_id = stripe_recorder.id;
-            // `set` do not allow modify its element, 
-            // however, the way we cal table_info's hash would ignore difference in `stripe_id`
-            // therefore we can only erase the `tmp_tables[i]` and insert them again.
-            // BUG this is potentially incorrect!
-            table_info_set.erase(tmp_tables[i]);
-            table_info_set.insert(tmp_tables[i]);
+            f->leader_number, findnum);
+#ifdef STRIPE_RECORDER
+        zal_utils::StripeRecorder stripe_recorder;
+        stripe_recorder.id = -1;  // -1 to indicate invalid
+        std::vector<zal_utils::table_info> tmp_tables;
+#endif
+        for (int j = 0; j < findnum; j++) {
+          Log(options_.info_log,
+              "SST %ld has %ld bytes , its disk number is %d",
+              stripe[j]->number, stripe[j]->file_size, stripe[j]->ecnode);
+          stripeRecorder_.AddTable(stripe[j]->number, f->leader_number);
+#ifdef STRIPE_RECORDER
+          stripe_recorder.tables.push_back(stripe[j]->number);
+          zal_utils::table_info tmp_table_info(stripe[j]->number,
+                                               stripe[j]->file_size);
+          if (!table_info_set.contains(tmp_table_info)) {
+            table_info_set.insert(tmp_table_info);
           } else {
-            // BUG we should not reach here!
-            table_info_set.insert(tmp_tables[i]);
-            std::cerr << "DoCompactionWork: we should not reach here!" << std::endl;
+            zal_utils::table_info new_table_info =
+                *(table_info_set.find(tmp_table_info));
+            new_table_info.table_size = stripe[j]->file_size;
+            if (new_table_info.table_size != -1 &&
+                new_table_info.table_size != stripe[j]->file_size) {
+              std::cerr << "table " << stripe[j]->number
+                        << " size mismatch, in_set size:"
+                        << new_table_info.table_size
+                        << " vs stripe_recorded size: " << stripe[j]->file_size
+                        << std::endl;
+            }
+            table_info_set.erase(tmp_table_info);
+            table_info_set.insert(new_table_info);
+          }
+          tmp_tables.push_back(tmp_table_info);
+#endif
+        }
+#ifdef STRIPE_RECORDER
+        if (!stripe_recorder_set.contains(stripe_recorder)) {
+          // current stripe recorder is not in the set
+          global_stripe_index_mutex.lock();
+          stripe_recorder.id = f->leader_number;
+          global_stripe_index_mutex.unlock();
+          stripe_recorder_set.insert(stripe_recorder);
+          for (int i = 0; i < tmp_tables.size(); i++) {
+            if (table_info_set.contains(tmp_tables[i])) {
+              tmp_tables[i].stripe_id = stripe_recorder.id;
+              // `set` do not allow modify its element,
+              // however, the way we cal table_info's hash would ignore
+              // difference in `stripe_id` therefore we can only erase the
+              // `tmp_tables[i]` and insert them again. BUG this is potentially
+              // incorrect!
+              table_info_set.erase(tmp_tables[i]);
+              table_info_set.insert(tmp_tables[i]);
+            } else {
+              // BUG we should not reach here!
+              table_info_set.insert(tmp_tables[i]);
+              std::cerr << "DoCompactionWork: we should not reach here!"
+                        << std::endl;
+            }
           }
         }
+#endif
+
+        /*
+          Log(options_.info_log, "SST %d has %lld bytes from %s to %s , its disk
+          number is %d", stripe[j]->number, stripe[j]->file_size,
+              stripe[j]->smallest.user_key().ToString().c_str(),
+          stripe[j]->largest.user_key().ToString().c_str(), stripe[j]->ecnode);
+        */
       }
-      #endif
-        
-      /*
-        Log(options_.info_log, "SST %d has %lld bytes from %s to %s , its disk number is %d",
-            stripe[j]->number, stripe[j]->file_size,
-            stripe[j]->smallest.user_key().ToString().c_str(), stripe[j]->largest.user_key().ToString().c_str(), stripe[j]->ecnode);
-      */
-    }
     }
 
   assert(versions_->NumLevelFiles(compact->compaction->level()) > 0);
@@ -1210,11 +1208,13 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   ParsedInternalKey ikey;
   std::string current_user_key;
   bool has_current_user_key = false;
-  SequenceNumber last_sequence_for_key = kMaxSequenceNumber;int num=0;int curnum=0;
+  SequenceNumber last_sequence_for_key = kMaxSequenceNumber;
+  int num = 0;
+  int curnum = 0;
   while (input->Valid() && !shutting_down_.load(std::memory_order_acquire)) {
     // Prioritize immutable compaction work
     curnum++;
-    if(!input->status().ok()) printf("wrong ahead at %d\n",curnum);
+    if (!input->status().ok()) printf("wrong ahead at %d\n", curnum);
     if (has_imm_.load(std::memory_order_relaxed)) {
       const uint64_t imm_start = env_->NowMicros();
       mutex_.Lock();
@@ -1338,61 +1338,55 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     // added by lzy .
     int ec_m = config::ec_m;
     std::set<uint64_t> whichtoec;
-    if(compact->compaction->level()<=config::maxlowlevel)
-      for(int i=0;i<compact->compaction->num_input_files(0);i++)
-      {
-        FileMetaData *f = compact->compaction->input(0,i);
-        if(f->lognumber && f->leader_number == 0)
+    if (compact->compaction->level() <= config::maxlowlevel)
+      for (int i = 0; i < compact->compaction->num_input_files(0); i++) {
+        FileMetaData* f = compact->compaction->input(0, i);
+        if (f->lognumber && f->leader_number == 0)
           versions_->current()->ecnode_waiting[f->ecnode]--;
         whichtoec.insert(f->leader_number);
-        if(f->lognumber != 0)
+        if (f->lognumber != 0)
           versions_->current()->waitforec_.erase(f->lognumber);
       }
     else
-      for(int i=0;i<compact->compaction->num_input_files(0);i++)
-      {
-        uint64_t number = compact->compaction->input(0,i)->number;
-        for(int j=0;j<ec_m;j++)
-        {
-          std::string fname = ParityBlockFileName(ecpath_.getEcpath()[j], number, j);
+      for (int i = 0; i < compact->compaction->num_input_files(0); i++) {
+        uint64_t number = compact->compaction->input(0, i)->number;
+        for (int j = 0; j < ec_m; j++) {
+          std::string fname =
+              ParityBlockFileName(ecpath_.getEcpath()[j], number, j);
           env_->RemoveFile(fname);
         }
       }
-    if(compact->compaction->level()<config::maxlowlevel)
-      for(int i=0;i<compact->compaction->num_input_files(1);i++)
-      {
-        FileMetaData *f = compact->compaction->input(1,i);
-        if(f->lognumber && f->leader_number == 0)
+    if (compact->compaction->level() < config::maxlowlevel)
+      for (int i = 0; i < compact->compaction->num_input_files(1); i++) {
+        FileMetaData* f = compact->compaction->input(1, i);
+        if (f->lognumber && f->leader_number == 0)
           versions_->current()->ecnode_waiting[f->ecnode]--;
         whichtoec.insert(f->leader_number);
-        if(f->lognumber != 0)
+        if (f->lognumber != 0)
           versions_->current()->waitforec_.erase(f->lognumber);
       }
     else
-      for(int i=0;i<compact->compaction->num_input_files(1);i++)
-      {
-        uint64_t number = compact->compaction->input(1,i)->number;
-        for(int j=0;j<ec_m;j++)
-        {
-          std::string fname = ParityBlockFileName(ecpath_.getEcpath()[j], number, j);
+      for (int i = 0; i < compact->compaction->num_input_files(1); i++) {
+        uint64_t number = compact->compaction->input(1, i)->number;
+        for (int j = 0; j < ec_m; j++) {
+          std::string fname =
+              ParityBlockFileName(ecpath_.getEcpath()[j], number, j);
           env_->RemoveFile(fname);
         }
       }
     whichtoec.erase(0);
-    if(!whichtoec.empty())
-    {
-      for(auto it=whichtoec.begin();it!=whichtoec.end();it++)
-        for(int i=0;i<config::ec_p;i++)
-        {
-          std::string fname = ParityBlockFileName(ecpath_.getEcpath()[i+config::ec_k], *it, i);
+    if (!whichtoec.empty()) {
+      for (auto it = whichtoec.begin(); it != whichtoec.end(); it++)
+        for (int i = 0; i < config::ec_p; i++) {
+          std::string fname = ParityBlockFileName(
+              ecpath_.getEcpath()[i + config::ec_k], *it, i);
           env_->RemoveFile(fname);
         }
     }
     status = InstallCompactionResults(compact);
     // added by lzy .
     std::set<uint64_t> generatedSST;
-    for(int i=0;i<compact->outputs.size();i++)
-    {
+    for (int i = 0; i < compact->outputs.size(); i++) {
       generatedSST.insert(compact->outputs[i].number);
     }
     versions_->current()->RestructEc(whichtoec, generatedSST);
@@ -1500,7 +1494,7 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
       // Done
     } else {
       leveldb::ReadOptions opt = options;
-      s = current->Get(opt, lkey, value, &stats);
+      s = current->Get(opt, lkey, value, &stats, stripeRecorder_);
       have_stat_update = true;
     }
     mutex_.Lock();
@@ -1558,7 +1552,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     printf(
         "================WL::db_impl.cc 1217 "
         "DBImpl::Write==================\n");
-  //Timer timer("DBImpl::Write");
+  // Timer timer("DBImpl::Write");
   long long write_start_time = getCurrentTime();
   Writer w(&mutex_);
   w.batch = updates;
@@ -1594,22 +1588,23 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
       long long AddRecord_end_time = getCurrentTime();
       long long AddRecord_all_time = AddRecord_end_time - AddRecord_start_time;
       total_times["DB::Write--AddRecord"] += AddRecord_all_time;
-      for(int i=0;i<replicaLog_.getReplicaNum();i++){
-        status = log_backup[i]->AddRecord(WriteBatchInternal::Contents(write_batch));
+      for (int i = 0; i < replicaLog_.getReplicaNum(); i++) {
+        status =
+            log_backup[i]->AddRecord(WriteBatchInternal::Contents(write_batch));
       }
       bool sync_error = false;
       if (status.ok() && options.sync) {
-        //日志文件缓冲区中内容写入磁盘
+        // 日志文件缓冲区中内容写入磁盘
         long long Sync_start_time = getCurrentTime();
         status = logfile_->Sync();
         long long Sync_end_time = getCurrentTime();
         long long Sync_all_time = Sync_end_time - Sync_start_time;
         total_times["DB::Write--logfile_->Sync"] += Sync_all_time;
 
-        // LogReplica 
-        //status = logfile_backOne->Sync();
-        //status = logfile_backTwo->Sync();
-        for(int i=0;i<replicaLog_.getReplicaNum();i++){
+        // LogReplica
+        // status = logfile_backOne->Sync();
+        // status = logfile_backTwo->Sync();
+        for (int i = 0; i < replicaLog_.getReplicaNum(); i++) {
           status = logfile_backup[i]->Sync();
         }
         if (!status.ok()) {
@@ -1621,8 +1616,10 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
         long long InsertInto_start_time = getCurrentTime();
         status = WriteBatchInternal::InsertInto(write_batch, mem_);
         long long InsertInto_end_time = getCurrentTime();
-        long long InsertInto_all_time = InsertInto_end_time - InsertInto_start_time;
-        total_times["DB::Write--WriteBatchInternal::InsertInto"] += InsertInto_all_time;
+        long long InsertInto_all_time =
+            InsertInto_end_time - InsertInto_start_time;
+        total_times["DB::Write--WriteBatchInternal::InsertInto"] +=
+            InsertInto_all_time;
       }
       mutex_.Lock();
       if (sync_error) {
@@ -1656,7 +1653,6 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
 
   // 时间计算汇总
   long long Write_all_time = write_end_time - write_start_time;
-
 
   // 保存调用时间
   total_times["DB::Write"] += Write_all_time;
@@ -1721,7 +1717,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
     printf(
         "================WL::db_impl.cc 1344 "
         "DBImpl::MakeRoomForWrite==================\n");
-  //Timer timer("DBImpl::MakeRoomForWrite");
+  // Timer timer("DBImpl::MakeRoomForWrite");
   mutex_.AssertHeld();
   assert(!writers_.empty());
   bool allow_delay = !force;
@@ -1767,9 +1763,11 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // LogReplica
       std::vector<WritableFile*> lfiles(replicaLog_.getReplicaNum());
 
-      for(int i=0;i<replicaLog_.getReplicaNum();i++) {
+      for (int i = 0; i < replicaLog_.getReplicaNum(); i++) {
         lfiles[i] = nullptr;
-        env_->NewWritableFile(LogFileName(replicaLog_.getLogReplicaPaths()[i], new_log_number), &lfiles[i]);
+        env_->NewWritableFile(
+            LogFileName(replicaLog_.getLogReplicaPaths()[i], new_log_number),
+            &lfiles[i]);
       }
 
       // added by lzy to keep log file without ec work .
@@ -1785,7 +1783,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       delete log_;
 
       s = logfile_->Close();
-      for(int i=0;i<replicaLog_.getReplicaNum();i++){
+      for (int i = 0; i < replicaLog_.getReplicaNum(); i++) {
         s = logfile_backup[i]->Close();
       }
 
@@ -1806,7 +1804,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       logfile_ = lfile;
       logfile_number_ = new_log_number;
       log_ = new log::Writer(lfile);
-      for(int i=0;i<replicaLog_.getReplicaNum();i++){
+      for (int i = 0; i < replicaLog_.getReplicaNum(); i++) {
         logfile_backup[i] = lfiles[i];
         log_backup[i] = new log::Writer(lfiles[i]);
       }
@@ -1936,11 +1934,12 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
 DB::~DB() = default;
 
-Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr, ReplicaLog& replicaLog, Ecpath& ecpath) {
+Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr,
+                ReplicaLog& replicaLog, Ecpath& ecpath) {
   if (printFlag)
     printf(
         "================WL::db_impl.cc 1549 DB::Open()===================\n");
-  //Timer timer("DB::Open");
+  // Timer timer("DB::Open");
   *dbptr = nullptr;
 
   DBImpl* impl = new DBImpl(options, dbname, replicaLog, ecpath);
@@ -1956,12 +1955,14 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr, R
     WritableFile* lfile;
     std::vector<WritableFile*> lfiles(replicaLog.getReplicaNum());
 
-    for(int i=0; i<replicaLog.getReplicaNum(); i++){
-        WritableFile* tmplfile;
-        lfiles[i] = tmplfile;
-        s = options.env->NewWritableFile(LogFileName(replicaLog.getLogReplicaPaths()[i], new_log_number),
-                                     &lfiles[i]);
-        //printf("=====db_impl.cc 1787 backup path is %s ======\n", replicaLog.getLogReplicaPaths()[i].c_str());
+    for (int i = 0; i < replicaLog.getReplicaNum(); i++) {
+      WritableFile* tmplfile;
+      lfiles[i] = tmplfile;
+      s = options.env->NewWritableFile(
+          LogFileName(replicaLog.getLogReplicaPaths()[i], new_log_number),
+          &lfiles[i]);
+      // printf("=====db_impl.cc 1787 backup path is %s ======\n",
+      // replicaLog.getLogReplicaPaths()[i].c_str());
     }
 
     s = options.env->NewWritableFile(LogFileName(dbname, new_log_number),
@@ -1971,7 +1972,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr, R
       impl->logfile_ = lfile;
       impl->logfile_number_ = new_log_number;
       impl->log_ = new log::Writer(lfile);
-      for(int i=0;i<replicaLog.getReplicaNum();i++){
+      for (int i = 0; i < replicaLog.getReplicaNum(); i++) {
         impl->logfile_backup[i] = lfiles[i];
         impl->log_backup[i] = new log::Writer(lfiles[i]);
       }
@@ -1995,7 +1996,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr, R
     *dbptr = impl;
   } else {
     delete impl;
-  }  
+  }
   return s;
 }
 

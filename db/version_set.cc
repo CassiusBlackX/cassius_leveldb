@@ -293,7 +293,10 @@ static bool NewestFirst(FileMetaData* a, FileMetaData* b) {
 }
 
 void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
-                                 bool (*func)(void*, int, FileMetaData*)) {
+                                 bool (*func)(void*, int, FileMetaData*), 
+                                 // added by zal to filter out expired sst
+                                 bool (*filter)(int table_id)
+                                 ) {
   const Comparator* ucmp = vset_->icmp_.user_comparator();
 
   // Search level-0 in order from newest to oldest.
@@ -301,17 +304,11 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
   tmp.reserve(files_[0].size());
   for (uint32_t i = 0; i < files_[0].size(); i++) {
     FileMetaData* f = files_[0][i];
-    #ifdef EXPIRED_DELETE
-    zal_utils::table_info tmp_table_info(f->number, f->smallest.user_key().ToString(), f->largest.user_key().ToString(), f->file_size);
-    if (table_info_set.contains(tmp_table_info)) {
-      // if the file is ixpired, we should skip it. to leveldb, it is not exist.
-      if (table_info_set.find(tmp_table_info)->expired) {
-        continue;
-      }
-    } else {
-      std::cerr << "table_info_set does not contain " << f->number << std::endl;
+    // added by zal to filter out expired sst
+    if (!filter(f->number)) {  // the current sst is invalid, skip it
+      continue;
     }
-    #endif
+    // ***---
     if (ucmp->Compare(user_key, f->smallest.user_key()) >= 0 &&
         ucmp->Compare(user_key, f->largest.user_key()) <= 0) {
       tmp.push_back(f);
@@ -335,17 +332,11 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
     uint32_t index = FindFile(vset_->icmp_, files_[level], internal_key);
     if (index < num_files) {
       FileMetaData* f = files_[level][index];
-      #ifdef EXPIRED_DELETE
-      zal_utils::table_info tmp_table_info(f->number, f->smallest.user_key().ToString(), f->largest.user_key().ToString(), f->file_size);
-      if (table_info_set.contains(tmp_table_info)) {
-        // if the file is ixpired, we should skip it. to leveldb, it is not exist.
-        if (table_info_set.find(tmp_table_info)->expired) {
-          continue;
-        }
-      } else {
-        std::cerr << "table_info_set does not contain " << f->number << std::endl;
+      // added by zal to filter out expired sst
+      if (!filter(f->number)) {  // the current sst is invalid, skip it
+        continue;
       }
-      #endif
+      // ***---
       if (ucmp->Compare(user_key, f->smallest.user_key()) < 0) {
         // All of "f" is past any data for user_key
       } else {
@@ -358,7 +349,9 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
 }
 
 Status Version::Get(ReadOptions& options, const LookupKey& k,
-                    std::string* value, GetStats* stats) {
+                    std::string* value, GetStats* stats, 
+                    StripeRecorder& stripeRecorder  // added by zal
+                    ) {
   stats->seek_file = nullptr;
   stats->seek_file_level = -1;
 
@@ -431,7 +424,9 @@ Status Version::Get(ReadOptions& options, const LookupKey& k,
   state.saver.user_key = k.user_key();
   state.saver.value = value;
 
-  ForEachOverlapping(state.saver.user_key, state.ikey, &state, &State::Match);
+  ForEachOverlapping(state.saver.user_key, state.ikey, &state, &State::Match, [&stripe_recorder](int table_id) {
+                             return stripe_recorder.LookUpTable(table_id);
+                           });
 
   return state.found ? state.s : Status::NotFound(Slice());
 }
@@ -799,7 +794,7 @@ int Version::RestructEc(std::set<uint64_t> whichtoec, std::set<uint64_t> generat
 }
 
 // added by lzy to realize low-level ec .
-int Version::LowLevelEc(int forced)
+int Version::LowLevelEc(int forced, StripeRecorder& stripeRecorder)
 {
   int ec_m = config::ec_m;
   int ec_k = config::ec_k;
@@ -999,6 +994,9 @@ int Version::LowLevelEc(int forced)
     for(int j=0;j<numtoec;j++)
     {
       filestoec[j]->leader_number = filestoec[0]->number;
+      // ----****** added by zal to add table_info and stripe_info to `StripeRecorder` ******----
+      stripeRecorder.AddTable(filestoec[0]->number, filestoec[0]->leader_number);
+      // **********-----
     }
     std::string fname[ec_m];
     for(int j=0;j<numtoec;j++)

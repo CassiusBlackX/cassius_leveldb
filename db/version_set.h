@@ -73,7 +73,9 @@ class Version {
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
   Status Get(ReadOptions&, const LookupKey& key, std::string* val,
-             GetStats* stats);
+             GetStats* stats,
+             StripeRecorder& stripeRecorder  // added by zal to filter out expired sst when searching
+             );
 
   // Adds "stats" into the current state.  Returns true if a new
   // compaction may need to be triggered, false otherwise.
@@ -115,7 +117,7 @@ class Version {
   std::string DebugString() const;
 
   // added by lzy to realize low-level ec .
-  int LowLevelEc(int forced);
+  int LowLevelEc(int forced, StripeRecorder& stripeRecorder);
   int EcMark(std::set<uint64_t> whichtoec);
   int HighLevelEc(FileMetaData *f, Ecpath ecpath);
   int Findstripe(uint64_t leadernumber, FileMetaData* returnf[], int* findnum);
@@ -155,7 +157,9 @@ class Version {
   //
   // REQUIRES: user portion of internal_key == user_key.
   void ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
-                          bool (*func)(void*, int, FileMetaData*));
+                          bool (*func)(void*, int, FileMetaData*),
+                          bool (*filter)(int table_id)  // added by zal
+                          );
 
   VersionSet* vset_;  // VersionSet to which this Version belongs
   Version* next_;     // Next version in linked list
