@@ -35,7 +35,7 @@ int main() {
 
   // lzy's stuff
   const std::string log_path1 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
-  const std::string log_path2 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0;
+  const std::string log_path2 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
 
   const std::string ec_path0 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
   const std::string ec_path1 = std::string(CMAKELISTS_PATH) + "/build/testdb/data1";
