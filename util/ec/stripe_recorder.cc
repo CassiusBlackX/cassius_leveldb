@@ -1,3 +1,4 @@
+#include <iostream>
 #include "stripe_recorder.h"
 
 void StripeRecorder::AddTable(int table_id, int stripe_id) {
@@ -52,6 +53,12 @@ void StripeRecorder::DeleteTable(std::vector<std::string>& files_names,
   }
   t_mutex_.unlock();
   q_mutex_.unlock();
+  // NOTE: log can be removed in release version
+  std::cout << "files: ";
+  for (auto s : files_names) {
+    std::cout << s << " ";
+  }
+  std::cout << "are no longer needed, therefore deleted" << std::endl;
 }
 
 bool StripeRecorder::LookUpTable(int table_id) const {
