@@ -23,7 +23,7 @@ int main() {
   std::mt19937 rng(44);
   std::uniform_int_distribution<int> dist(0, VALID_KEYS_COUNT - 1);
 
-  const std::string db_name = "testdb";
+  const std::string db_name = "lzydb";
   leveldb::Options opts;
   leveldb::DestroyDB(db_name, opts);
 
@@ -35,7 +35,7 @@ int main() {
 
   // lzy's stuff
   const std::string log_path1 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
-  const std::string log_path2 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
+  const std::string log_path2 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0;
 
   const std::string ec_path0 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
   const std::string ec_path1 = std::string(CMAKELISTS_PATH) + "/build/testdb/data1";
@@ -52,7 +52,7 @@ int main() {
   replicapath.push_back(log_path1);
   replicapath.push_back(log_path2);
 
-  leveldb::ReplicaLog replicalog;   
+  leveldb::ReplicaLog replicalog;
 
   replicalog.setReplicaMeta(replicaNum,replicapath);
 
@@ -65,11 +65,12 @@ int main() {
   ecpath.push_back(ec_path4);
   ecpath.push_back(ec_path5);
 
-  leveldb::Ecpath Aecpath;   
+  leveldb::Ecpath Aecpath;
 
   Aecpath.setEcpathMeta(ecNum,ecpath);
 
-  leveldb::Status status = leveldb::DB::Open(opts, db_name, &db);
+  leveldb::Status status = leveldb::DB::Open(opts, db_name, &db, replicalog, Aecpath);
+
   if (!status.ok()) {
     std::cerr << "failed to open db!" << std::endl;
     return -1;

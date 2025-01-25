@@ -130,7 +130,7 @@ void LeveldbDB::Init() {
     replicapath.push_back(log_path1);
     replicapath.push_back(log_path2);
 
-    ReplicaLog replicalog;   
+    ReplicaLog replicalog;
 
     replicalog.setReplicaMeta(replicaNum,replicapath);
 
@@ -143,7 +143,7 @@ void LeveldbDB::Init() {
     ecpath.push_back(ec_path4);
     ecpath.push_back(ec_path5);
 
-    Ecpath Aecpath;   
+    Ecpath Aecpath;
 
     Aecpath.setEcpathMeta(ecNum,ecpath);
 
