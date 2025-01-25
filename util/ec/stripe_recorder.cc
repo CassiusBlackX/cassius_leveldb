@@ -39,7 +39,8 @@ void StripeRecorder::ExpireTable(int table_id) {
   }
 }
 
-void StripeRecorder::DeleteTable(std::vector<std::string>& files_names, const std::string& dbname) {
+void StripeRecorder::DeleteTable(std::vector<std::string>& files_names,
+                                 const std::string& dbname) {
   q_mutex_.lock();
   t_mutex_.lock();
   while (!to_be_deleted_tables.empty()) {
@@ -53,7 +54,11 @@ void StripeRecorder::DeleteTable(std::vector<std::string>& files_names, const st
   q_mutex_.unlock();
 }
 
-
 bool StripeRecorder::LookUpTable(int table_id) const {
-  return table_infos.at(table_id).valid;
+  auto it = table_infos.find(table_id);
+  if (it != table_infos.end()) {
+    return it->second.valid;
+  }
+  // the current table is not in a stirpe, therefore it must be valid!
+  return true;
 }
