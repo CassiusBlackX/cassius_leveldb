@@ -33,6 +33,10 @@ int main() {
   opts.write_buffer_size = 4 * 1024 * 1024;
 
   leveldb::Status status = leveldb::DB::Open(opts, db_name, &db);
+  if (!status.ok()) {
+    std::cerr << "failed to open db!" << std::endl;
+    return -1;
+  }
   // maintain a map tof the correect kv
   std::unordered_map<std::string, std::string> store;
 
@@ -46,6 +50,7 @@ int main() {
       return 1;
     }
   }
+  std::cout << "success initial put" << std::endl;
 
   for (size_t i = 0; i < ITERATIONS; i++) {
     static const size_t modifies = VALID_KEYS_COUNT * MODIFY_RATIO;
@@ -85,6 +90,7 @@ int main() {
         return 1;
       }
     }
+    std::cout << "iteration: " << i << std::endl;
   }
 
   std::cout << "all right!" << std::endl;

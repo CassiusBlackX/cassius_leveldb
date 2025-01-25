@@ -174,6 +174,10 @@ target_link_libraries(stripe_recorder pthread isal)
 
 # stripe_recorder_test
 add_executable(stripe_recorder_test ${CMAKE_CURRENT_SOURCE_DIR}/src/stripe_recorder_test.cpp ${LEVELDB_SOURCES} ${UTILS_FILES})
+target_sources( stripe_recorder PRIVATE
+  ${LEVELDB_ROOT_DIR}/util/ec/replicalog.cc
+  ${LEVELDB_ROOT_DIR}/util/ec/stripe_recorder.cc
+)
 target_link_libraries(stripe_recorder_test pthread /lib/libisal.a)
 
 
