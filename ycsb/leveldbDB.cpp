@@ -159,9 +159,9 @@ void LeveldbDB::Init() {
     if (!s.ok()) {
         throw utils::Exception(std::string("LevelDB Open: ") + s.ToString());
     }
-    }
+}
 
-    void LeveldbDB::Cleanup() {
+void LeveldbDB::Cleanup() {
     const std::lock_guard<std::mutex> lock(mu_);
     if (--ref_cnt_) {
         return;

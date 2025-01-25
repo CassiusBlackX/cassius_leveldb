@@ -8,6 +8,7 @@
 #include "leveldb/db.h"
 #include "leveldb/options.h"
 #include "leveldb/status.h"
+#include "leveldb/replicalog.h"
 
 #include "zal_utils.h"
 
@@ -22,7 +23,7 @@ int main() {
   std::mt19937 rng(44);
   std::uniform_int_distribution<int> dist(0, VALID_KEYS_COUNT - 1);
 
-  const std::string db_name = "checkdb";
+  const std::string db_name = "testdb";
   leveldb::Options opts;
   leveldb::DestroyDB(db_name, opts);
 
@@ -31,6 +32,42 @@ int main() {
   leveldb::ReadOptions read_options;
   opts.create_if_missing = true;
   opts.write_buffer_size = 4 * 1024 * 1024;
+
+  // lzy's stuff
+  const std::string log_path1 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
+  const std::string log_path2 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
+
+  const std::string ec_path0 = std::string(CMAKELISTS_PATH) + "/build/testdb/data0";
+  const std::string ec_path1 = std::string(CMAKELISTS_PATH) + "/build/testdb/data1";
+  const std::string ec_path2 = std::string(CMAKELISTS_PATH) + "/build/testdb/data2";
+  const std::string ec_path3 = std::string(CMAKELISTS_PATH) + "/build/testdb/data3";
+  const std::string ec_path4 = std::string(CMAKELISTS_PATH) + "/build/testdb/parity0";
+  const std::string ec_path5 = std::string(CMAKELISTS_PATH) + "/build/testdb/parity1";
+
+  const int replicaNum=2;
+  const int ecNum = 6;
+
+  std::vector<std::string> replicapath;
+
+  replicapath.push_back(log_path1);
+  replicapath.push_back(log_path2);
+
+  leveldb::ReplicaLog replicalog;   
+
+  replicalog.setReplicaMeta(replicaNum,replicapath);
+
+  std::vector<std::string> ecpath;
+
+  ecpath.push_back(ec_path0);
+  ecpath.push_back(ec_path1);
+  ecpath.push_back(ec_path2);
+  ecpath.push_back(ec_path3);
+  ecpath.push_back(ec_path4);
+  ecpath.push_back(ec_path5);
+
+  leveldb::Ecpath Aecpath;   
+
+  Aecpath.setEcpathMeta(ecNum,ecpath);
 
   leveldb::Status status = leveldb::DB::Open(opts, db_name, &db);
   if (!status.ok()) {
