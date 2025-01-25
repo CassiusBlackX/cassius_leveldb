@@ -178,6 +178,9 @@ target_sources( stripe_recorder_test PRIVATE
   ${LEVELDB_ROOT_DIR}/util/ec/replicalog.cc
   ${LEVELDB_ROOT_DIR}/util/ec/stripe_recorder.cc
 )
+target_compile_definitions(stripe_recorder_test
+  CMAKELISTS_PATH="${CMAKE_CURRENT_SOURCE_DIR}" 
+)
 target_link_libraries(stripe_recorder_test pthread /lib/libisal.a)
 
 
