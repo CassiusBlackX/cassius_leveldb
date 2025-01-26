@@ -967,6 +967,7 @@ int Version::LowLevelEc(int forced, StripeRecorder& stripeRecorder)
     {
       filestoec[j]->leader_number = filestoec[0]->number;
       // ----****** added by zal to add table_info and stripe_info to `StripeRecorder` ******----
+      std::cout << "LowLevelEc::AddTable, adding: " << filestoec[j]->number << "->" << filestoec[0]->leader_number << std::endl;
       stripeRecorder.AddTable(filestoec[j]->number, filestoec[0]->leader_number);
       // **********-----
     }

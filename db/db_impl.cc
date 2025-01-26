@@ -1123,73 +1123,13 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       if (f->leader_number) {
         Log(options_.info_log, "Stripe %ld consists %d sst files",
             f->leader_number, findnum);
-#ifdef STRIPE_RECORDER
-        zal_utils::StripeRecorder stripe_recorder;
-        stripe_recorder.id = -1;  // -1 to indicate invalid
-        std::vector<zal_utils::table_info> tmp_tables;
-#endif
         for (int j = 0; j < findnum; j++) {
           Log(options_.info_log,
               "SST %ld has %ld bytes , its disk number is %d",
               stripe[j]->number, stripe[j]->file_size, stripe[j]->ecnode);
+          std::cout << "DoCompactionWork::AddTable, adding: " << stripe[j]->number << "->" << f->leader_number << std::endl;
           stripeRecorder_.AddTable(stripe[j]->number, f->leader_number);
-#ifdef STRIPE_RECORDER
-          stripe_recorder.tables.push_back(stripe[j]->number);
-          zal_utils::table_info tmp_table_info(stripe[j]->number,
-                                               stripe[j]->file_size);
-          if (!table_info_set.contains(tmp_table_info)) {
-            table_info_set.insert(tmp_table_info);
-          } else {
-            zal_utils::table_info new_table_info =
-                *(table_info_set.find(tmp_table_info));
-            new_table_info.table_size = stripe[j]->file_size;
-            if (new_table_info.table_size != -1 &&
-                new_table_info.table_size != stripe[j]->file_size) {
-              std::cerr << "table " << stripe[j]->number
-                        << " size mismatch, in_set size:"
-                        << new_table_info.table_size
-                        << " vs stripe_recorded size: " << stripe[j]->file_size
-                        << std::endl;
-            }
-            table_info_set.erase(tmp_table_info);
-            table_info_set.insert(new_table_info);
-          }
-          tmp_tables.push_back(tmp_table_info);
-#endif
         }
-#ifdef STRIPE_RECORDER
-        if (!stripe_recorder_set.contains(stripe_recorder)) {
-          // current stripe recorder is not in the set
-          global_stripe_index_mutex.lock();
-          stripe_recorder.id = f->leader_number;
-          global_stripe_index_mutex.unlock();
-          stripe_recorder_set.insert(stripe_recorder);
-          for (int i = 0; i < tmp_tables.size(); i++) {
-            if (table_info_set.contains(tmp_tables[i])) {
-              tmp_tables[i].stripe_id = stripe_recorder.id;
-              // `set` do not allow modify its element,
-              // however, the way we cal table_info's hash would ignore
-              // difference in `stripe_id` therefore we can only erase the
-              // `tmp_tables[i]` and insert them again. BUG this is potentially
-              // incorrect!
-              table_info_set.erase(tmp_tables[i]);
-              table_info_set.insert(tmp_tables[i]);
-            } else {
-              // BUG we should not reach here!
-              table_info_set.insert(tmp_tables[i]);
-              std::cerr << "DoCompactionWork: we should not reach here!"
-                        << std::endl;
-            }
-          }
-        }
-#endif
-
-        /*
-          Log(options_.info_log, "SST %d has %lld bytes from %s to %s , its disk
-          number is %d", stripe[j]->number, stripe[j]->file_size,
-              stripe[j]->smallest.user_key().ToString().c_str(),
-          stripe[j]->largest.user_key().ToString().c_str(), stripe[j]->ecnode);
-        */
       }
     }
 

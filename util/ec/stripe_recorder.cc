@@ -3,6 +3,7 @@
 
 void StripeRecorder::AddTable(int table_id, int stripe_id) {
   table_info table(table_id, stripe_id);
+  std::cout << "@@@adding" << table_id << " -> " << stripe_id << std::endl;
   t_mutex_.lock();
   table_infos[table_id] = table;
   t_mutex_.unlock();
@@ -17,7 +18,6 @@ void StripeRecorder::AddTable(int table_id, int stripe_id) {
   s_mutex_.lock();
   stripe_infos[stripe_id].tables.push_back(table_id);
   s_mutex_.unlock();
-  std::cout << "@@@adding" << table_id << " -> " << stripe_id << std::endl;
   std::cout << "stripe: " << stripe_id << " contains " << stripe_infos[stripe_id].tables.size() << std::endl;
 }
 
