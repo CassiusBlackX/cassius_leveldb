@@ -305,6 +305,9 @@ void DBImpl::RemoveObsoleteFiles() {
           break;
         case kTableFile:
           keep = (live.find(number) != live.end());
+          if (!keep) {
+            stripeRecorder_.ExpireTable(number);
+          }
           break;
         case kTempFile:
           // Any temp files that are currently being written to must
