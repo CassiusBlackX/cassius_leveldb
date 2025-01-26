@@ -28,6 +28,7 @@ void StripeRecorder::ExpireTable(int table_id) {
   std::cout << "table_id: " << table_id << " is expired, belonging to stripe_id: " << stripe_id << " , whose expired_count is: " << stripe.expired_count << std::endl;
 
   if (stripe.expired_count >= delete_threshold) {
+    std::cout << "!!!!stripe: " << stripe_id << " is going to be deleted!!!" << std::endl;
     q_mutex_.lock();
     for (int table_id : stripe.tables) {
       // we would physically delete the tables from the disk
@@ -54,9 +55,12 @@ void StripeRecorder::DeleteTable(std::vector<std::string>& files_names,
   }
   t_mutex_.unlock();
   q_mutex_.unlock();
-  std::cout << "the following files are going to be physically deleted: ";
-  for (auto s : files_names) {
-    std::cout << s << ", ";
+  if (files_names.size() > 0) {
+    std::cout << "the following files are going to be physically deleted: ";
+    for (auto s : files_names) {
+      std::cout << s << ", ";
+    }
+    std::cout << std::endl;
   }
 }
 
