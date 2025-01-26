@@ -8,6 +8,7 @@ void StripeRecorder::AddTable(int table_id, int stripe_id) {
   t_mutex_.unlock();
 
   if (stripe_infos.find(stripe_id) == stripe_infos.end()) {
+    std::cout << "creating new stripe: " << stripe_id << std::endl;
     stripe_info stripe(stripe_id);
     s_mutex_.lock();
     stripe_infos[stripe_id] = stripe;
@@ -16,6 +17,8 @@ void StripeRecorder::AddTable(int table_id, int stripe_id) {
   s_mutex_.lock();
   stripe_infos[stripe_id].tables.push_back(table_id);
   s_mutex_.unlock();
+  std::cout << "@@@adding" << table_id << " -> " << stripe_id << std::endl;
+  std::cout << "stripe: " << stripe_id << " contains " << stripe_infos[stripe_id].tables.size() << std::endl;
 }
 
 void StripeRecorder::ExpireTable(int table_id) {
@@ -29,12 +32,16 @@ void StripeRecorder::ExpireTable(int table_id) {
 
   if (stripe.expired_count >= delete_threshold) {
     std::cout << "!!!!stripe: " << stripe_id << " is going to be deleted!!!" << std::endl;
+    std::cout << "threr are " << stripe.tables.size() << " in the stripe";
     q_mutex_.lock();
-    for (int table_id : stripe.tables) {
+    for (int id : stripe.tables) {
       // we would physically delete the tables from the disk
-      to_be_deleted_tables.push(table_id);
+      to_be_deleted_tables.push(id);
+      std::cout << " " << id << ",";
     }
     q_mutex_.unlock();
+    std::cout << std::endl;
+    std::cout << "ExpireTable::to_be_deleted_tables.size: " << to_be_deleted_tables.size() << std::endl;
 
     s_mutex_.lock();
     stripe_infos.erase(stripe_id);
@@ -46,6 +53,9 @@ void StripeRecorder::DeleteTable(std::vector<std::string>& files_names,
                                  const std::string& dbname) {
   q_mutex_.lock();
   t_mutex_.lock();
+  if (!to_be_deleted_tables.empty()) {
+    std::cout << "DeleteTable::to_be_deleted_tables.size: " << to_be_deleted_tables.size() << std::endl;
+  }
   while (!to_be_deleted_tables.empty()) {
     int table_id = to_be_deleted_tables.front();
     to_be_deleted_tables.pop();
