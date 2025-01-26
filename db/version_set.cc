@@ -863,6 +863,9 @@ int Version::LowLevelEc(int forced, StripeRecorder& stripeRecorder)
         for(int j=0;j<ec_k;j++)
         {
           filestoec[j]->leader_number = leadernumber_;
+          // added by zal , StripeRecorder::AddTable
+          std::cout << "LowLevelEC, not FORCED, adding: " << filestoec[j]->number << "->" << leadernumber_ << std::endl;
+          stripeRecorder.AddTable(filestoec[j]->number, leadernumber_); 
         }
         leadernumber_++;
         std::string fname[ec_m+1];
