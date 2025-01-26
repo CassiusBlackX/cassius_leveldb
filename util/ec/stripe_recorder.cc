@@ -1,4 +1,5 @@
 #include <iostream>
+#include <format>
 #include "stripe_recorder.h"
 
 void StripeRecorder::AddTable(int table_id, int stripe_id) {
@@ -61,7 +62,7 @@ void StripeRecorder::DeleteTable(std::vector<std::string>& files_names,
     to_be_deleted_tables.pop();
     table_info table = table_infos[table_id];
     table_infos.erase(table_id);
-    files_names.push_back(dbname + "/" + std::to_string(table_id));
+    files_names.push_back(dbname + "/" + std::format("{:06}", table_id) + ".ldb");
   }
   t_mutex_.unlock();
   q_mutex_.unlock();

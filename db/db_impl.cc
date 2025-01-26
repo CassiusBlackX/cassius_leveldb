@@ -305,6 +305,7 @@ void DBImpl::RemoveObsoleteFiles() {
           break;
         case kTableFile:
           keep = (live.find(number) != live.end());
+          // added by zal to temporarily not physically delete a table but simply expire it
           if (!keep) {
             stripeRecorder_.ExpireTable(number);
           }
