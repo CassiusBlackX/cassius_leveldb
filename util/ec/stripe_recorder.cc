@@ -25,6 +25,7 @@ void StripeRecorder::ExpireTable(int table_id) {
   stripe_info& stripe = stripe_infos[stripe_id];
   stripe.expired_count++;
   s_mutex_.unlock();
+  std::cout << "table_id: " << table_id << " is expired, belonging to stripe_id: " << stripe_id << " , whose expired_count is: " << stripe.expired_count << std::endl;
 
   if (stripe.expired_count >= delete_threshold) {
     q_mutex_.lock();
@@ -53,12 +54,10 @@ void StripeRecorder::DeleteTable(std::vector<std::string>& files_names,
   }
   t_mutex_.unlock();
   q_mutex_.unlock();
-  // NOTE: log can be removed in release version
-  std::cout << "files.count:" << files_names.size() <<": ";
+  std::cout << "the following files are going to be physically deleted: ";
   for (auto s : files_names) {
-    std::cout << s << " ";
+    std::cout << s << ", ";
   }
-  std::cout << "are no longer needed, therefore deleted" << std::endl;
 }
 
 bool StripeRecorder::LookUpTable(int table_id) const {

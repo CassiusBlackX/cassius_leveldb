@@ -1,23 +1,28 @@
 #ifndef UTILS_EC_STRIPE_RECORDER_H_
 #define UTILS_EC_STRIPE_RECORDER_H_
 // zal added
-#include <unordered_map>
-#include <queue>
 #include <mutex>
+#include <queue>
+#include <unordered_map>
+#include <iostream>
 
 class StripeRecorder {
  public:
   StripeRecorder() = default;
   ~StripeRecorder() = default;
   StripeRecorder(unsigned delete_threshold)
-      : delete_threshold(delete_threshold) {}
-  // when adding a table, also add the table to the StripeRecorder
-  void AddTable(int table_id, int stripe_id);
-  // when leveldb tries to delete a table, a table is marked as expired, but will not be deleted immediately
+      : delete_threshold(delete_threshold){std::cout << "delete_threashold: " << delete_threshold << std::endl;}
+        // when adding a table, also add the table to the StripeRecorder
+        void AddTable(int table_id, int stripe_id);
+  // when leveldb tries to delete a table, a table is marked as expired, but
+  // will not be deleted immediately
   void ExpireTable(int table_id);
-  // when there are tables in `do_be_deleted`, use `env` funcs to physically delete the tables
-  void DeleteTable(std::vector<std::string>& files_names, const std::string& dbname);
-  // when looking up a table, check if the table is still valid in the stripe, if valid, return true
+  // when there are tables in `do_be_deleted`, use `env` funcs to physically
+  // delete the tables
+  void DeleteTable(std::vector<std::string>& files_names,
+                   const std::string& dbname);
+  // when looking up a table, check if the table is still valid in the stripe,
+  // if valid, return true
   bool LookUpTable(int table_id) const;
 
  private:
@@ -25,7 +30,6 @@ class StripeRecorder {
   std::mutex s_mutex_;
   std::mutex t_mutex_;
   std::mutex q_mutex_;
-
 
   struct stripe_info {
     int stripe_id;
@@ -48,7 +52,9 @@ class StripeRecorder {
 
   std::unordered_map<int, table_info> table_infos;
   std::unordered_map<int, stripe_info> stripe_infos;
-  std::queue<int> to_be_deleted_tables;  // would be convenient when we are going to physically delete the tables from the disk
+  std::queue<int>
+      to_be_deleted_tables;  // would be convenient when we are going to
+                             // physically delete the tables from the disk
 };
 
 #endif  // UTILS_EC_STRIPE_RECORDER_H_
