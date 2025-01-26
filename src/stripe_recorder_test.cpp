@@ -12,7 +12,7 @@
 
 #include "zal_utils.h"
 
-static const size_t VALID_KEYS_COUNT = 1e5;
+static const size_t VALID_KEYS_COUNT = 1e10;
 static const double MODIFY_RATIO = 0.35;
 static const double READ_RATIO = 0.55;
 static const size_t RECENT = 1e5;
